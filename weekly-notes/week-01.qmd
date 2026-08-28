@@ -8,6 +8,70 @@ date: 2026-08-28
 
 <!-- CHANGE THIS: replace with your own notes -->
 
+What is a website?
+
+a folder of html files → quarto
+
+&
+
+a computer always on → github pages (free)
+
+What is quarto?
+
+RENDER
+
+.qmd (i write) → quarto (machine) → .html (webpage)
+
+What happens in the machine?
+
+1. Read file top to bottom
+2. Finds code chunks
+3. Sends chunks to R and gets results back
+4. Glues text into HTML
+
+Anatomy of qmd
+
+YAML
+
+markdown (own writing)
+
+code chunks
+
+Files + F
+
+What is “index”
+
+Website rule: Ask for a folder, get folders (index.html)
+
+name.github.io/ → docs/index.html
+
+/weekly-notes/ → docs/weekly-notes/index.html
+
+GIT/ version tracker, invisible, runs on own computer 
+
+Github.com/ website that stores copy of folder
+
+GitHub Desktop/ buttons that tell Git what to do
+
+- Commit: “save a labeled snapshot” (lives on computer)
+- Push: “send snapshot to Github.com”
+- R script: code only, sandbox
+
+# Files + Folders
+
+Who is this file for?
+
+| For me | For the machines |
+| --- | --- |
+| index.qmd | quarto.yml (settings for whole site) |
+| about.qmd | freeze/ → quarto |
+| weekly-notes/*.qmd | Rproj → RStudio |
+| assignments/*.qmd | gitignore → GiL |
+|  | Renviron → R (secrets) |
+- every week, download qmd and data put them in assignments and data folders respectively
+-
+
+## Elizabeth's original notes that I'm keeping bc they are helpful lolol
 Set up the portfolio workflow: made a repository from a template, cloned it with
 GitHub Desktop, edited files in RStudio, rendered with Quarto, and published to
 GitHub Pages.
@@ -35,11 +99,10 @@ sessionInfo()$R.version$version.string
 
 <!-- CHANGE THIS: 3-4 sentences -->
 
-What I want out of this course:
+What I want out of this course: Tools for analyzing and using machines to model problems.
 
-One thing I'm nervous about:
+One thing I'm nervous about: The final challenge, competition sometimes stresses me out.
 
 ## Questions I Still Have
 
--
--
+-None for now

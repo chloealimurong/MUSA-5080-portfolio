@@ -6,20 +6,19 @@ title: "About"
 
 <!-- CHANGE THIS -->
 
-Write a few paragraphs about yourself here: where you came from before MUSA,
-what drew you to urban spatial analytics, and what you're hoping to do with it.
+Before MUSA, I did a couple different things. I was a part of NASA DEVELOP where I conducted a spatial and temporal analysis of landfill methane emissions in New Hampshire. I also worked for the DC Govt. where I helped manage their database systems (enterprise and through GitHub and ArcGIS). I did a recent project for Mapping Black California where I rebuilt their Stop the Hate Dashboard that helps users identify hate crime patterns across California based on demographic and time. Right now, I help Spectrum (Charter Communications) map rural America and their internet serviceability. I became interested in Urban Spatial Analytics when I took an applied Social Statistics class where I could gather public data and make meaningful analyses with it. I hope to continue that throughout and after MUSA. 
 
 ## Skills
 
 <!-- CHANGE THIS: update this through the semester as it becomes true -->
 
 - **Languages & Tools:** R, Quarto, Git
-- **Spatial:** (add as you learn)
+- **Spatial:** ArcGIS (Esri Suite), QGIS
 - **Data:** US Census / ACS via `tidycensus`
 
 ## Contact
 
 <!-- CHANGE THIS -->
 
-- Email: your-email@upenn.edu
-- GitHub: [@your-username](https://github.com/your-username)
+- Email: alimuro1@upenn.edu
+- GitHub: [@chloealimurong](https://github.com/chloealimurong)
