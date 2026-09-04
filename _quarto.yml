@@ -27,6 +27,7 @@ format:
     toc: true
     code-fold: false
     code-tools: true
+    mainfont: "Avenir"
 
 execute:
   freeze: auto
