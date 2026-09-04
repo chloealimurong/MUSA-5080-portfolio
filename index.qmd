@@ -4,8 +4,6 @@ title: "Home"
 
 # Chloe Alimurong {#welcome}
 
-<!-- CHANGE THIS: replace with your own name above -->
-
 Welcome to my portfolio for **MUSA 5080: Public Policy Analytics** at the
 University of Pennsylvania.
 
@@ -14,8 +12,6 @@ weekly notes, course assignments, and a final project applying data analysis to
 urban policy questions.
 
 ## About Me
-
-<!-- CHANGE THIS: two or three sentences about yourself -->
 
 Hi! I'm a student in the MUSA program at Penn. My background is in
 GIS, and I'm interested in GIS.
@@ -27,8 +23,6 @@ GIS, and I'm interested in GIS.
 - **[About](about.qmd)** — more background and how to reach me
 
 ## Get in Touch
-
-<!-- CHANGE THIS -->
 
 - Email: alimuro1@upenn.edu
 - GitHub: [@chloealimurong](https://github.com/chloealimurong)
