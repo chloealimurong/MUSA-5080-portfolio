@@ -10,5 +10,5 @@ listing:
   filter-ui: false
 ---
 
-Notes from each week of MUSA 5080. New entries appear here automatically —
-add a `.qmd` file to this folder and render.
+Notes from each week of MUSA 5080. New entries appear here automatically.
+#add a `.qmd` file to this folder and render.

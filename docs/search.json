@@ -109,7 +109,7 @@
     "href": "weekly-notes/index.html",
     "title": "Weekly Notes",
     "section": "",
-    "text": "Notes from each week of MUSA 5080. New entries appear here automatically — add a .qmd file to this folder and render.\n\n\n\n\n\n\n\n\n\n\n\nWeek 2\n\n\nblah\n\n\n\n\n\nSep 4, 2026\n\n\n\n\n\n\n\nWeek 1: Getting Set Up\n\n\nFirst impressions, and getting the workflow running.\n\n\n\n\n\nAug 28, 2026\n\n\n\n\n\nNo matching items"
+    "text": "Notes from each week of MUSA 5080. New entries appear here automatically. #add a .qmd file to this folder and render.\n\n\n\n\n\n\n\n\n\n\n\nWeek 2\n\n\nfirst quiz, packages, objects, verbs, census, etc…\n\n\n\n\n\nSep 4, 2026\n\n\n\n\n\n\n\nWeek 1: Getting Set Up\n\n\nFirst impressions, and getting the workflow running.\n\n\n\n\n\nAug 28, 2026\n\n\n\n\n\nNo matching items"
   },
   {
     "objectID": "data/readme.html",
@@ -131,5 +131,26 @@
     "title": "Week 2",
     "section": "",
     "text": "What We Did\n\n\nReflection\n\n\nQuestions I still have"
+  },
+  {
+    "objectID": "weekly-notes/week-02.html#packages",
+    "href": "weekly-notes/week-02.html#packages",
+    "title": "Week 2",
+    "section": "packages",
+    "text": "packages\n\ninstall.packages(”dplyr”)\n\nonly needs to be done once\n\nlibrary(dplyr)\n\ndo every time u wanna use it\n\ndata frame (table)\n\nevery row is an observation\nevery column is a variable\nfor dplyr, tibble is a df that prints nicer\n\n\n\n\n\nNAME\nINCOME\nMOE\n\n\n\n\nAdams\n45678\n9989\n\n\nBerks\n567890\n9876\n\n\nBucks\n3456789\n2345\n\n\n\n\nwhat dplyr does\n\ntibble → verb → tibble"
+  },
+  {
+    "objectID": "weekly-notes/week-02.html#verbs",
+    "href": "weekly-notes/week-02.html#verbs",
+    "title": "Week 2",
+    "section": "verbs",
+    "text": "verbs\n\nfilter(): picks rows\nselect(): picks columns\nmutate(): add a new computed column\narrange(): change the order of rows (asc, desc)\ngroup_by() + summarize(): many rows become few\n\nStep 1.\nfilter(counties, moe_pct&gt;10)\nStep 2.\narrange(Step1, desc(moe_pct))\nStep 3.\nselect(NAME, moe_pct)\n\nWant to write “and then”?\n\n%&gt;% or |&gt; : strings functions without saving an intermediate file along the way like steps 1-3.\n\n\nSteps 1-3 become:\nnew_data ← counties %&gt;%\n    filter(moe_pct) %&gt;%\n    arrange(desc(moe_pct))%&gt;%\n    select(NAME, moe_pct)\ntakes input (counties) and applies these functions at once into a single"
+  },
+  {
+    "objectID": "weekly-notes/week-02.html#census-data",
+    "href": "weekly-notes/week-02.html#census-data",
+    "title": "Week 2",
+    "section": "census data",
+    "text": "census data\nDecennial Census\n\n10 years\n10 questions\nlong form\n\nAmerican Community Survey (ACS)\n\n2005\n3% of households are surveyed on income, commute, ethnicity, rent, etc..\nResults in an estimate for the population\n1-year ACS conducted in places &gt; 65,000 people (data available and current at metropolitan level)\n5-year ACS (block groups and census tracts)\n\neach year represents a 5-year average\nestimate +- a margin of error (MOE)\n\n\nB1234_001E\nB is the Base table\n1234 is the table number\n001E is the Line number\nE is the Estimate\nM is the MOE\nload_variables()\nstate → county → tract (neighborhood of 5-8,000 people and boundaries change frequently)\nGEOID\n42101000100\n42 is the state\n101 is the county\n000100 is the tract (11 digits)\nblock groups is the 12th\n\nalways stored as string\nmake sure u check the way its stored before trying to do anything with it"
   }
 ]
