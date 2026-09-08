@@ -1,8 +1,8 @@
 ---
 title: "Assignment 2: Who Do We Know the Least About?"
 subtitle: "Measuring uncertainty in American Community Survey data"
-author: "YOUR NAME HERE"
-date: today
+author: "Chloe"
+date: 2026-09-07
 format:
   html:
     toc: true
@@ -13,39 +13,12 @@ execute:
 ---
 
 ::: {.callout-important}
-## Read this first, then delete this box
-
-**Where this file goes:** `assignments/assignment2.qmd` in your portfolio repo.
-
-**This is a portfolio piece.** It will be published on your website where employers
-can see it. So:
-
-- **Delete every callout box like this one** before your final render. They're
-  instructions, not content.
-- Replace `YOUR NAME HERE` in the header above.
-- Write in complete sentences. Someone who isn't in this class should be able to
-  read it and follow what you did.
-
-**Graded 0 / 1 / 2.** A 2 means it runs, it's complete, and the writing shows you
-understood what the numbers meant — not that you did something fancy.
-
-**Due:** before next class. Rendered, committed, pushed, and visible on your live site.
-:::
-
 ## Setup
 
 ```{r}
 library(tidyverse)
 library(tidycensus)
 ```
-
-::: {.callout-note}
-## Delete this box
-
-If this chunk fails, your Census API key isn't set up. Check your `.Renviron`
-file, then **restart R** — that's the step people forget.
-:::
-
 ---
 
 ## The question
