@@ -2,6 +2,10 @@
 title: "Assignment 2: Who Do We Know the Least About?"
 subtitle: "Measuring uncertainty in American Community Survey data"
 author: "Chloe Alimurong"
+params:
+  state: "MD"
+  acs_year: 2026
+  acs_dataset: "acs5"
 date: 2026-09-07
 format:
   html:
@@ -22,7 +26,7 @@ library(tidycensus)
 
 ## The question
 
-**In this analysis, I look at median home values across counties in Maryland, and ask which communities we measure most and least reliably. I am interested in seeing the trends over time, especially before and after COVID and counties with more urban areas. Or, if there's a trend amongst demographics such as having a Bachelors degree. I wonder if there's data in specific communities that's least reliable and if I can find potential explanations in those discrepancies.**
+**In this analysis, I look at median home values across counties in Maryland, and ask which communities measure most and least reliably. I am interested in seeing which counties are the least reliable in data. I wonder if I can find potential explanations in those discrepancies, if the least reliable counties may tend to respond to the survey less or misrepresent their counties based on MOE.**
 
 ---
 
@@ -63,9 +67,10 @@ county_data <- county_data %>%
   mutate(moe_pct = moe / estimate * 100)
 ```
 
-Now sort to see which counties are measured least reliably.
 
 ```{r}
+
+# sorts to see which counties are measured least reliably.
 county_data %>%
   arrange(desc(moe_pct)) %>%
   select(NAME, estimate, moe, moe_pct) %>%
@@ -151,25 +156,39 @@ county_summary <- county_data %>%
     #sum_prop = moe_prop()
   )
 
-print(county_summary)
-
-
-## Parameterize the report.
+#print(county_summary)
+# did i do this right?
 
 ## Write a function and iterate.
 
+county_pull <- function(variable, state) {get_acs(
+  geography = "county",
+  variables = variable,
+  state = state,
+  year = 2023,
+  survey = "acs5"
+)
+}
+
+purrr::map_dfr('B25077_001', 'NY')
+# did i do this right?/how do i check?
 
 ## Change the geographic scale.
 
+tract_data <- get_acs(
+  geography = "tract",
+  variables = my_variable,
+  state = my_state,
+  year = 2023,
+  survey = "acs5"
+)
+
+tract_data <- tract_data %>%
+  mutate(moe_pct_tract = moe / estimate * 100)
+
+print(tract_data)
+
+# wow the moe is higher at the tract level i guess because its an even smaller sample than the county.
 ```
 
 ---
-
-## Before you submit
-
-::: {.callout-note}
-## Delete this box — checklist
-- [ ] **Session → Restart R**, then render the whole project. It works.
-- [ ] Committed and pushed
-- [ ] You opened your live site and looked at the published page
-:::
