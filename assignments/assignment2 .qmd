@@ -1,7 +1,7 @@
 ---
 title: "Assignment 2: Who Do We Know the Least About?"
 subtitle: "Measuring uncertainty in American Community Survey data"
-author: "Chloe"
+author: "Chloe Alimurong"
 date: 2026-09-07
 format:
   html:
@@ -12,7 +12,6 @@ execute:
   message: false
 ---
 
-::: {.callout-important}
 ## Setup
 
 ```{r}
@@ -23,56 +22,16 @@ library(tidycensus)
 
 ## The question
 
-Every number the American Community Survey publishes is an estimate drawn from a
-sample, not a count. That means every number comes with a margin of error — a
-statement about how wrong it might be.
-
-Most people ignore it. In this assignment, you won't.
-
-::: {.callout-tip}
-## Delete this box
-
-Rewrite the paragraph below in your own words once you've picked your state and
-variable. Two or three sentences saying what you're looking at and why.
-:::
-
-**In this analysis, I look at [YOUR VARIABLE] across counties in [YOUR STATE], and
-ask which communities we measure most and least reliably.**
+**In this analysis, I look at median home values across counties in Maryland, and
+ask which communities we measure most and least reliably. I am interested in seeing the trends over time, especially before and after COVID and counties with more urban areas. Or, if there's a trend amongst demographics such as having a Bachelors degree. I wonder if there's data in specific communities that's least reliable and if I can find potential explanations in those discrepancies.**
 
 ---
 
 ## Choosing what to measure
 
-::: {.callout-note}
-## Instructions — delete this box
-
-Pick **a state** and **a variable**. Anything except Pennsylvania and median
-household income, which we did in class.
-
-Some variables that work well:
-
-| Code | What it is |
-|------|-----------|
-| `B19013_001` | Median household income |
-| `B25064_001` | Median gross rent |
-| `B25077_001` | Median home value |
-| `B01002_001` | Median age |
-| `B08303_001` | Total commuters (travel time table) |
-| `B15003_022` | Number with a bachelor's degree |
-
-Want something else? Run this in your **console** (not in a chunk):
-
-```r
-vars <- load_variables(2023, "acs5")
-View(vars)
-```
-
-Then use the search box.
-:::
-
 ```{r}
-my_state <- "___"        # two-letter abbreviation, in quotes
-my_variable <- "___"     # the variable code, in quotes
+my_state <- "MD"        
+my_variable <- "B25077_001"     # Median home value
 ```
 
 ## Pulling the data
@@ -94,14 +53,7 @@ dim(county_data)
 head(county_data)
 ```
 
-::: {.callout-tip}
-## Delete this box
-
-Below, say how many counties are in your state and confirm your row count matches.
-One sentence.
-:::
-
-**[How many rows did you get? Does that match the number of counties in your state?]**
+**I got 6 rows and there are 24 counties in MD, the row count does not match because I just printed the head (default first 6 rows) so I used print(county_data) and checked there are truly 24 rows.**
 
 ---
 
@@ -113,15 +65,8 @@ percentage.
 
 ```{r}
 county_data <- county_data %>%
-  mutate(moe_pct = ___ / ___ * 100)
+  mutate(moe_pct = moe / estimate * 100)
 ```
-
-::: {.callout-note}
-## Delete this box
-
-Fill in the two blanks. You want: how big is the margin of error, relative to the
-estimate, as a percentage?
-:::
 
 Now sort to see which counties are measured least reliably.
 
@@ -132,14 +77,7 @@ county_data %>%
   head(10)
 ```
 
-::: {.callout-tip}
-## Delete this box
-
-Write a sentence or two naming the least reliable county and its `moe_pct`.
-:::
-
-**[Which county has the largest margin of error relative to its estimate? How large
-is it?]**
+**The county with the largest margin of error relative to its estimate is Somerset county at 9.1% MOE, making it the least reliable county in MD for my variable.**
 
 ---
 
@@ -148,23 +86,15 @@ is it?]**
 ```{r}
 county_data <- county_data %>%
   mutate(reliability = case_when(
-    moe_pct < 5  ~ "High confidence",
-    moe_pct < 10 ~ "Moderate",
+    moe_pct < 1  ~ "High confidence",
+    moe_pct < 5 ~ "Moderate",
     TRUE         ~ "Low confidence"
   ))
 
 count(county_data, reliability)
 ```
 
-::: {.callout-note}
-## Delete this box
-
-Those cutoffs (5% and 10%) are a bit of a judgment call, not a law of nature. If almost
-every county lands in one category, adjust them so the split is informative for
-*your* variable — then say in your writing that you changed them and why. (I have a feeling for county-level, you may end up in high confidence everywhere - is smaller geographies where it really shows up. So feel free to change those numbers around a bit)
-:::
-
-**[How many counties fall into each category?]**
+**4 counties in MD fall into the 'High' confidence category. 18 fall into the 'Moderate' confidence category. 2 fall into the 'Low' confidence category. I rearranged the threshold to be 1% for high confidence and 5% for moderate since my state is small and there are counties with an even smaller population so they mostly fell into high confidence. **
 
 ---
 
@@ -187,19 +117,12 @@ county_wide <- get_acs(
 head(county_wide)
 ```
 
-::: {.callout-note}
-## Delete this box
-
-Notice the column names: `myvarE`, `myvarM`, `popE`, `popM`. The `E` and `M`
-suffixes are estimate and margin of error.
-:::
-
 ```{r}
 county_wide <- county_wide %>%
   mutate(moe_pct = myvarM / myvarE * 100) %>%
   mutate(reliability = case_when(
-    moe_pct < 5  ~ "High confidence",
-    moe_pct < 15 ~ "Moderate",
+    moe_pct < 1  ~ "High confidence",
+    moe_pct < 5 ~ "Moderate",
     TRUE         ~ "Low confidence"
   ))
 ```
@@ -208,52 +131,20 @@ Now compare the average population of counties in each reliability category.
 
 ```{r}
 county_wide %>%
-  group_by(___) %>%
+  group_by(reliability) %>%
   summarize(
     n_counties = n(),
-    avg_population = mean(___)
+    avg_population = mean(popE)
   )
 ```
 
-::: {.callout-note}
-## Delete this box
-
-Two blanks. What are you grouping by? What are you averaging?
-:::
-
-::: {.callout-tip}
-## Delete this box
-
-This table is the heart of the assignment. Describe what it shows in two or three
-sentences.
-:::
-
-**[What is the average population of high-confidence counties versus low-confidence
-counties? Is there a pattern?]**
+** The average population of high-confidence counties is 863,423 people. The low-confidence counties has an average of  21,975 people while the moderate averages at 148,506 people. This pattern tells us that the greater the average population, the greater likelihood of a higher margin of error is for the median home value variable.**
 
 ---
 
 ## What this means for policy
 
-::: {.callout-important}
-## Instructions — delete this box
-
-**Write 200–250 words.** 
-
-Address all three:
-
-1. **Which communities in your state do we know the least about?** Name specific
-   counties from your results.
-2. **Why?** Connect the pattern to how the ACS actually works — it's a sample, and
-   smaller places yield smaller samples.
-3. **What could go wrong?** Imagine a state agency allocating funding using your
-   variable, treating every county's number as equally certain. Who is likely to be
-   hurt, and how?
-
-Use your own numbers. 
-:::
-
-**[Your 200–250 word reflection goes here.]**
+**As a MD resident, this makes sense that the counties we know the least about/have less accurate information on, are the counties with smaller populations. Somerset county has the highest MOE at 9.1%, I don't really know anyone from there, nor Kent (5.8%) or Garrett (4.7%) county, the top 2 and 3 for highest MOE. These are counties with wild horses, other wildlife, and beaches. The counties we pass through on our way to Ocean City where you can't really see houses. Somerset county, MD is one of the few counties in the Northeastern-ish US that only recently needed fiber (internet cable) built to. Basically, not a lot of people live there. Not enough to have a significant statistics on median home value. This is likely because of sampling variability in results we can't account for in small counties. ACS is a survey of a sample so bigger counties like Baltimore and Montgomery would receive more responses to the survey than a small one like Somerset. There could be a really expensive or really cheap house that could be skewing the data that adds to statistical uncertainty in a small county. For state agencies studying the variable, median home value, smaller counties would be at a disadvantage. For example, if a state agency wants to allocate funding such as decreasing or increasing the construction of affordable housing units or even discounting/increasing APR for homeowner loans, residents of these smaller counties that need funding would be left out since the data likely misrepresented them or left them out completely. For example, Somerset county's estimated median home value is $164,300, for those looking to move to Somerset county, they wouldn't receive much assistance as the predicted value is lower than most counties in MD.**
 
 ---
 
@@ -266,6 +157,17 @@ Use your own numbers.
 
 They're here for anyone who finished the above and found it straightforward. Pick
 one (or more) that interests you. 
+
+```{r}
+
+## Propagate the margin of error
+
+county_wide <- county_wide %>%
+  mutate(moe_sum = moe_sum(estimate))
+         
+head(county_wide)
+
+```
 
 1. **Propagate the margin of error.** If you compute a derived value — a percentage,
    a ratio, a sum — its uncertainty depends on the uncertainty of its inputs, and
