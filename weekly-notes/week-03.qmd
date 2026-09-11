@@ -1,0 +1,14 @@
+---
+title: "Week 3: ggplot and more MOEs"
+format: html
+description: data vis, how to build a ggplot, MOE (change over time), fun demos & funner assignment
+date: 2026-09-11
+---
+
+# What We Did
+# week 3
+
+# Reflection
+
+
+# Questions I still have 
