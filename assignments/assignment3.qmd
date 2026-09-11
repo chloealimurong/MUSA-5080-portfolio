@@ -6,8 +6,15 @@ date: 2026-09-11
 format:
   html:
     toc: true
-    code-fold: false
-execute:
-  warning: false
-  message: false
+    code-fold: true
+    code-summary: "Show code"
+    embed-resources: true
 ---
+
+## Part 1
+
+## Part 2
+
+## Part 3
+
+## Part 4 

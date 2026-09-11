@@ -8,7 +8,114 @@ date: 2026-09-11
 # What We Did
 # week 3
 
-# Reflection
+# how to build visualizations
 
+- ansombe’s quartet
+    - charts can have the same mean , xy correlation but look completely different
+- plot is a mapping of columns in your data to visual properties on your page: the grammar of graphics/”gg”
+
+| Your data | Page (canvas) |
+| --- | --- |
+| estimate → | position on y-axis |
+| population → | position on x-axis |
+| reliability → | color |
+| moe → | size |
+- say i want to represent reliable estimates vs unreliable:
+    - i can color code and change the point size based on the field (one that categorizes them based on reliability)
+
+## how to build a ggplot
+
+1. assign ggplot to new variable “___”  with your data
+    
+    ```r
+    p ← ggplot(data) # creates blank canvas
+    ```
+    
+2. aesthetic mapping (not decoration, strictly biz)
+    
+    ```r
+    aes(...)
+    ```
+    
+3. specify geometry
+    
+    ```r
+    geom_*() # changes shape and type of chart
+    ```
+    
+4. example of tract level scatterplot 
+
+```r
+ggplot(tract_data) +
+	aes(x=pop, y=moe_pct) + 
+	geom_point(color = "blue") #changes color of dots to blue
+```
+
+| inside aes() | outside |
+| --- | --- |
+| aes(color=reliability) - only maps columns | geom_point(”blue”) - decorations |
+
+what i want to know
+
+GEOM
+
+how a variable is spread
+
+how do two variables relate?
+
+how do groups compare?
+
+how do things ∆ over time?
+
+how uncertain is a value?
+
+→ geom_histogram
+
+→ geom_point()
+
+→ geom boxplot() or geom_col()
+
+→ geom_line()
+
+→ geom_errorbar()
+
+- small multiple plots = facet_wrap(~reliability)
+
+## ACS does not have MOE
+
+- Coefficient of Variation (cv): relative measure of sampling error
+
+(standard error/ estimate) * 100
+
+- standard error (90%): moe/1.65
+- encompasses how many people u ask and how varied that sample is
+- low cv threshold: 12% vs census 15% (high reliability)
+- Derived Uncertainty:
+    
+    pov_rate = (# in pov/total pop) +- moe 
+    
+
+moe_sum() → adds estimates together
+
+moe_prop() → one estimate as share of another
+
+moe_ratio() → ratio of two different variables that are not subset of another
+
+# ∆ over time
+
+1. Overlapping Intervals
+    1. e.g. 5-yr estimates that overlap (2019-2023 & 2018-2022)
+    2. you have to compare the non-overlapping intervals 2014-2018 vs 2019-2023
+2. The Standard Error of Difference
+    1. can the difference actually have been zero ? since they are just samples, can’t tell based off estimate alone (hypothesis.)
+    2. SEdiff = (SE1^2 + SE^2)
+    3. z = (est1-est2)/SEdiff
+    4. 1.645
+3. Confidence Interval of Change 
+    1. Difference +- (1.645*SEdiff)
+
+# Reflection
+I am excited for assignment 3!
 
 # Questions I still have 
+when can we go over the challenging parts of assignment 2.. do i have to set up office hours... 🥺
