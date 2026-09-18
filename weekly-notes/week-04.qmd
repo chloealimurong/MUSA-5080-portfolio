@@ -1,0 +1,73 @@
+---
+title: "Week 4: CRS"
+format: html
+description: CRS stuff
+date: 2026-09-18
+---
+# week 4
+
+## coordinate reference systems (CRS)
+
+- geographic
+    - units: degrees
+- projected
+    - state plane units (ft or meters)
+    - good for local mapping
+- geoid, approximate by an ellipsoid
+- Clarke 1866 & Meades Ranch, KS → North American Datum of 1927 (NAD27)
+- NAD83, GRS-80 (satellite enabled) earth-centered, best for north america
+- WGS84 earth-centered (GPS standard) more global
+- datum == geographic crs
+    - latitude, longitude
+
+left.join(income_23, income15, by = “GeoID”)
+
+- shp, gdb, sf (simple features)
+- greenwich england long, equator lat
+- need to reference datum
+- SADD (Shapes, Areas, Distance, Direction)
+- map projection (3D model of earth to flatten)
+- lines are projected to 2D
+- mercator projection (cylindrical)
+- line of tangency (zero distortion)
+- transverse cylindrical
+- conic projection (for countries in higher latitudes)
+
+## Building a CRS
+
+1. need a datum
+2. SADD x projection
+    1. If you want to preserve shape, use a conformal conic projection
+    2. If you want to preserve size, use equal-area projections
+    3. If you want to preserve distance, use equal-distance projections
+    4. If you want to preserve direction, use mercator
+
+get_acs(…, geometry = TRUE)
+
+EPSG 2272 
+
+UTM
+
+First, 
+
+st_crs(data) to know units
+
+st_set_crs() → 2272 adding the correct label
+
+st_transform() → change the coordinate system
+
+st_filter() → count the tracts
+
+st_intersection() → shapes change → more shapes (collects common area)
+
+st_union() → everything
+
+st_join(stations, tracts)
+
+st_distance → returns matrix
+
+# Reflection
+GIS-love it!
+
+# Questions I still have 
+None :P
