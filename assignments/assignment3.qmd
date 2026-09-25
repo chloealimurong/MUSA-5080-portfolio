@@ -18,11 +18,11 @@ library(tidycensus)
 library(gt)
 ```
 
-## Part 1
+## Part 1: Introduction
 
 In the article, "New Census figures on Philly neighborhoods show inequality, high numbers of whites living in poverty" by Alfred Lubrano for the Philadelphia Media Network, Lubrano reports on the American Community Survey's 5-year estimate for 2013 to reveal a growing number of white people living in poverty in Philadelphia's neighborhoods. Fairhill being the prime example, he uses this to describe how white people in the area have struggled to recover from the recession and face addiction. Also, noting that Eastwick faces a higher number of people living in poverty, the article suggested low-income African immigrants are to explain for this change. A number of factors contribute to the poverty crisis in Philadelphia. My report will attempt to evaluate and validate this poverty rate change at the tract-level. I will be analyizing the following variables mentioned in the article; poverty rate(count of people with poverty status;B17001_002 divided by the total population for people with poverty status; B17001_001) and population (B01003_001). I will be using numbers from the 5-year estimate for 2006-2010 and 2013-2017, the same years the article used in comparison to make different points on the change in poverty rates in Philadelphia. As the article does not explicitly define the ACS variables they used, I will continue this report under the assumption that 'poverty rates' are the percent of people that fall below poverty level not separated by gender or age.
 
-## Part 2
+## Part 2: Code
 
 ```{r}
 #| message: false
@@ -276,7 +276,7 @@ tract_2017_pop <- get_acs(
 tract_2017_pop[tract_2017_pop$B01003_001E == "0", ]
 
 ```
-## Part 3 
+## Part 3: Which claims do I support
  The article makes numerous claims that can and cannot be backed by this replication. 
  1. The overall claim that poverty across the city has risen in 2013-2017 from 2006-2010 appears to be supported in that the average rate of poverty in the 2013-2017 estimate is truly 26.1% and is higher in comparison to the rate for 2006-2010 at 25.5%. 
  2. This replication study does not support the article's claim that poverty rates in 22 majority-white neighborhoods have increased, dramatically in some. This is largely due to the fact that 16% of the tracts (63 out of 384) show statistically significant change with 90% confidence. This study as is does not determine which neighborhoods that number encompasses or if there was a large, dramatic increase in poverty rates. It also does not support the claim that neighborhoods surrounding the Philadelphia International Airport has the highest poverty rate increase of any community, it reveals NA due to lack of populace.  
