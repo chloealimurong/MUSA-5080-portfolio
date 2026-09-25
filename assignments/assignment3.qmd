@@ -20,14 +20,13 @@ library(gt)
 
 ## Part 1
 
-**In the article, "New Census figures on Philly neighborhoods show inequality, high numbers of whites living in poverty" by Alfred Lubrano for the Philadelphia Media Network, reports on the American Community Survey's 5-year estimate for 2013 reveals a growing number of white people living in poverty in Philadelphia's neighborhoods. Fairhill being the example in the article, explaining that white people in the area never recovered from the recession and face addiction. Also, noting that Eastwick faces a higher number of people living in poverty, suggesting low-income African immigrants are to explain for this change. A number of factors contribute to the poverty crisis in Philadelphia. My report will attempt to evaluate variables and their effects on poverty on a tract-level. I will be analyizing the following variables mentioned in the article; poverty (dependent variable) and race, unemployment, median household income, food security, and immigration status. I will be using numbers from the 5-year estimate for 2006-2010 and 2013-2017, the same years the article used in comparison to make the point that race explains the change in poverty rates in Philadelphia. As the article does not explicitly define the ACS variables they used, I will continue this report under the assumption that 'poverty rates' are the percent below poverty level and that 'whites' are white alone non-Hispanic.**
-
-**include codes !**
+In the article, "New Census figures on Philly neighborhoods show inequality, high numbers of whites living in poverty" by Alfred Lubrano for the Philadelphia Media Network, Lubrano reports on the American Community Survey's 5-year estimate for 2013 to reveal a growing number of white people living in poverty in Philadelphia's neighborhoods. Fairhill being the prime example, he uses this to describe how white people in the area have struggled to recover from the recession and face addiction. Also, noting that Eastwick faces a higher number of people living in poverty, the article suggested low-income African immigrants are to explain for this change. A number of factors contribute to the poverty crisis in Philadelphia. My report will attempt to evaluate and validate this poverty rate change at the tract-level. I will be analyizing the following variables mentioned in the article; poverty rate(count of people with poverty status;B17001_002 divided by the total population for people with poverty status; B17001_001) and population (B01003_001). I will be using numbers from the 5-year estimate for 2006-2010 and 2013-2017, the same years the article used in comparison to make different points on the change in poverty rates in Philadelphia. As the article does not explicitly define the ACS variables they used, I will continue this report under the assumption that 'poverty rates' are the percent of people that fall below poverty level not separated by gender or age.
 
 ## Part 2
 
 ```{r}
 #| message: false
+#| warning: false
 
 #Computing the poverty rate
 
@@ -50,13 +49,13 @@ tract_2017 <- get_acs(
 tract_2010 <- tract_2010 %>%
   mutate(
     rate = poverty_belowE/poverty_totalE,
-    rate_moe = poverty_belowM/poverty_totalM
+    rate_moe = moe_prop(poverty_belowE, poverty_totalE, poverty_belowM, poverty_totalM)
   )
 
 tract_2017 <- tract_2017 %>%
   mutate(
     rate = poverty_belowE/poverty_totalE,
-    rate_moe = poverty_belowM/poverty_totalM
+    rate_moe = moe_prop(poverty_belowE, poverty_totalE, poverty_belowM, poverty_totalM)
   )
 
 #Computing the Coefficient of Variation & Flag reliability (Jurjevich et al. (2018))
@@ -98,7 +97,7 @@ reliability_table_2017 <- tract_2017 %>%
 
 reliability_table_2010 %>%
   gt() %>%
-  fmt_number(columns = c(rate, rate_moe), decimals = 0) %>%
+  fmt_percent(columns = c(rate, rate_moe), decimals = 0) %>%
   fmt_number(columns = cv, decimals = 1) %>%
   cols_label(
     dot      = "",
@@ -119,7 +118,7 @@ reliability_table_2010 %>%
 
 reliability_table_2017 %>%
   gt() %>%
-  fmt_number(columns = c(rate, rate_moe), decimals = 0) %>%
+  fmt_percent(columns = c(rate, rate_moe), decimals = 0) %>%
   fmt_number(columns = cv, decimals = 1) %>%
   cols_label(
     dot      = "",
@@ -164,22 +163,28 @@ poverty_wide <- poverty_change %>%
   )
 
 # 90% confidence significance test
-poverty_tested <- poverty_wide %>%
+rate_tested <- tract_2010 %>%
+  select(GEOID, NAME, rate_2010 = rate, moe_2010 = rate_moe) %>%
+  left_join(
+    tract_2017 %>% select(GEOID, rate_2017 = rate, moe_2017 = rate_moe),
+    by = "GEOID"
+  ) %>%
   mutate(
-    change   = `estimate_2006-2010` - `estimate_2013-2017`,
-    se_1     = `moe_2006-2010` / 1.645,
-    se_2     = `moe_2013-2017` / 1.645,
-    se_diff  = sqrt(se_1^2 + se_2^2),
-    moe_diff = se_diff * 1.645,
-    z        = change / se_diff,
+    change      = rate_2017 - rate_2010,
+    se_1        = moe_2010 / 1.645,
+    se_2        = moe_2017 / 1.645,
+    se_diff     = sqrt(se_1^2 + se_2^2),
+    moe_diff    = se_diff * 1.645,
+    z           = change / se_diff,
     significant = abs(z) > 1.645
   )
 
-poverty_tested %>%
-  count(significant)
+rate_tested %>% count(significant)
 
-poverty_tested %>%
+rate_tested %>%
+  filter(!is.na(significant)) %>%
   filter(significant) %>%
+  slice_head(n=15) %>%
   mutate(NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")) %>%
   ggplot(aes(x = reorder(NAME, change), y = change)) +
   geom_col(aes(fill = change > 0)) +
@@ -188,7 +193,7 @@ poverty_tested %>%
   geom_hline(yintercept = 0, linetype = "dashed") +
   coord_flip() +
   theme_minimal() +
-  labs(title = "Statistically significant change in poverty count by tract in Philadelphia",
+  labs(title = "Statistically Significant Change in Poverty Count by Tract in Philadelphia",
        subtitle = "2006–2010 vs 2013–2017, ACS 5-year estimates",
        x = NULL, y = "Change in people below poverty level")
 
@@ -197,7 +202,7 @@ ggplot(tract_2010)+
   aes(x=rate, y = rate_moe)+
   geom_point(color = "skyblue")+
   labs(
-    title = "Poverty rate vs. margin of error",
+    title = "Poverty rate vs. Margin of Error",
     subtitle = "Philadelphia tracts, ACS 2006–2010 5-year estimates",
     x = "Poverty rate",
     y = "Margin of error"
@@ -207,13 +212,14 @@ ggplot(tract_2017)+
   aes(x=rate, y = rate_moe)+
   geom_point(color = "lightpink")+
   labs(
-    title = "Poverty rate vs. margin of error",
+    title = "Poverty Rate vs. Margin of Error",
     subtitle = "Philadelphia tracts, ACS 2013–2017 5-year estimates",
-    x = "Poverty rate",
+    x = "Poverty Rate",
     y = "Margin of error"
   )
 
 tract_2010 %>%
+  filter(!is.na(rate)) %>%
   arrange(desc(rate_moe)) %>%
   mutate(NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")) %>%
   slice_head(n = 15) %>%
@@ -224,13 +230,14 @@ tract_2010 %>%
   theme_minimal() +
   scale_y_continuous(labels = scales::comma) +
   labs(
-    title = "Tracts with the largest margins of error",
+    title = "Tracts with the largest Margins of Error",
     subtitle = "Poverty Rate, ACS 2010 5-year estimates",
     x = NULL,
     y = "Poverty Rate"
   )
 
 tract_2017 %>%
+  filter(!is.na(rate)) %>%
   arrange(desc(rate_moe)) %>%
   mutate(NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")) %>%
   slice_head(n = 15) %>%
@@ -241,14 +248,15 @@ tract_2017 %>%
   theme_minimal() +
   scale_y_continuous(labels = scales::comma) +
   labs(
-    title = "Tracts with the largest margins of error",
+    title = "Tracts with the largest Margins of Error",
     subtitle = "Poverty Rate, ACS 2017 5-year estimates",
     x = NULL,
     y = "Poverty Rate"
   )
 
+
 ```
-**Some census tracts have NA values, you can see them if you scroll to the very bottom of the reliability tables for 2010 and 2017. Census tracts: 50, 9803-9809 have NaN values, a CV% of 1, and Reliability of Unreliable. This is because the population of these tracts is 0. Thus, why I will choose to exclude them from my written analysis. In the future, I will check for NA values first, then filter the data with the filter(var > 0) for those with population of zero. **
+ Some census tracts have NA values, you can see them if you scroll to the very bottom of the reliability tables for 2010 and 2017. Census tracts: 50, 9803-9809 have NaN values, a CV% of 1, and Reliability of Unreliable. This is because the population of these tracts is 0. Thus, why I will choose to exclude them from my written analysis. I did this in the script by applying "filter(!is.na(rate)) %>%" to filter the data with the filter(rate == NA) for those with rate of zero.  
 
 ```{r}
 #| message: false
@@ -269,7 +277,10 @@ tract_2017_pop[tract_2017_pop$B01003_001E == "0", ]
 
 ```
 ## Part 3 
-**The article makes numerous claims. The overall claim that poverty across the city has risen in 2013-2017 from 2006-2010 appears to be supported in that  **
+ The article makes numerous claims that can and cannot be backed by this replication. 
+ 1. The overall claim that poverty across the city has risen in 2013-2017 from 2006-2010 appears to be supported in that the average rate of poverty in the 2013-2017 estimate is truly 26.1% and is higher in comparison to the rate for 2006-2010 at 25.5%. 
+ 2. This replication study does not support the article's claim that poverty rates in 22 majority-white neighborhoods have increased, dramatically in some. This is largely due to the fact that 16% of the tracts (63 out of 384) show statistically significant change with 90% confidence. This study as is does not determine which neighborhoods that number encompasses or if there was a large, dramatic increase in poverty rates. It also does not support the claim that neighborhoods surrounding the Philadelphia International Airport has the highest poverty rate increase of any community, it reveals NA due to lack of populace.  
+ 3. We cannot determine in this replication backs any claim about neighborhood poverty rates, race-based poverty rates, or that any other demographic influencing poverty has a statistically significant effect on poverty rates. Doing so would require a different filter on ACS data and include a study on more variables, such as median income, and their significance. We do not know the exact variables they used to determine the proportion of white people in Fairhill and most explanatory variables such as immigration status and employment mentioned in the article were collected through testimony and qualitatively. 
 
 ## Part 4 Rewriting the central paragraph
 > Being released on Thursday, the U.S. Census Bureau‘s American Community Survey (ACS) Five-Year Estimate for 2013 through 2017 takes a microscope to the city’s formidable 26 percent poverty rate, revealing fault lines of distress and hardship.
@@ -279,4 +290,64 @@ The neighborhood of Eastwick in Southwest Philadelphia, near Philadelphia Intern
 White poverty throughout much of the city skyrocketed, led by the Northeast neighborhood of Holmesburg, which went from a 2 percent poverty rate to 19 percent.
 The median household income of Tioga-Nicetown plummeted from $28,026 to $17,493, the largest drop in the city.
 
-**Revision: The U.S Census Bureau's American Community Survey (ACS) Five Year estimates for 2013-2016 **
+**Revision: The U.S Census Bureau's American Community Survey (ACS) Five Year estimates for 2013-2016 reveals Philadelphia's average poverty rate of 26.1%, a 0.6% increase from the 2006-2010 (time period of the recession) at 25.5%.**
+```{r}
+#| echo: false
+summary_2017 <- tract_2017 %>%
+  summarize(
+    mean_rate   = mean(rate, na.rm = TRUE),
+    median_rate = median(rate, na.rm = TRUE),
+    min_rate    = min(rate, na.rm = TRUE),
+    max_rate    = max(rate, na.rm = TRUE)
+  )
+
+summary_2010 <- tract_2010 %>%
+  summarize(
+    mean_rate   = mean(rate, na.rm = TRUE),
+    median_rate = median(rate, na.rm = TRUE),
+    min_rate    = min(rate, na.rm = TRUE),
+    max_rate    = max(rate, na.rm = TRUE)
+  )
+
+print(summary_2010)
+print(summary_2017)
+```
+Out of the 384 tracts tested in this study, 63 tracts showed a statistically significant change with 90% confidence while 313 (over 80% of the tracts) did not. Most of the census tracts in Philadelphia did not show a change in poverty rate distinguishable enough from statistical noise. 
+ For example: 
+ The highest rate of change in poverty was Census Tract 56, an increase in 35.67%. The total poverty rate being 48.76% in the 2017 5-year estimate. 
+```{r}
+rate_tested %>%
+  filter(significant) %>%
+  arrange(desc(change)) %>%
+  select(NAME, rate_2010, rate_2017, change, moe_diff) %>%
+  slice_head(n = 10)
+
+```
+
+ The areas near the Philadelphia International Airport have no change in poverty rates due to having a population of zero. 
+```{r}
+#| echo: false
+zero_pop_geo <- get_acs(
+  geography = "tract",
+  variables = "B01003_001",
+  state     = "PA",
+  county    = "Philadelphia",
+  year      = 2017,
+  survey    = "acs5",
+  geometry  = TRUE
+) %>%
+  filter(GEOID %in% c("42101000500", "42101980300", "42101980400",
+                       "42101980500", "42101980600", "42101980700",
+                       "42101980800", "42101980900"))
+
+ggplot(zero_pop_geo) +
+  geom_sf(fill = "darkred") +
+  theme_minimal() +
+  labs(title = "Zero-population tracts excluded from analysis")
+```
+
+# References
+Jurjevich, J. R., Griffin, A. L., Spielman, S. E., Folch, D. C., Merrick, M., & Nagle, N. N. (2018). Navigating statistical uncertainty: How urban and regional planners understand and work with American community survey (ACS) data for guiding policy. Journal of the American Planning Association, 84(2), 112-126.
+
+Lubrano, Alfred. “New Census figures on Philly neighborhoods show inequality, high numbers of whites living in poverty.” WHYY / Philadelphia Inquirer, December 6, 2018. https://whyy.org/articles/new-census-figures-on-philly-neighborhoods-show-inequality-high-numbers-of-whites-living-in-poverty/
+
