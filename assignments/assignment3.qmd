@@ -27,6 +27,7 @@ library(gt)
 ## Part 2
 
 ```{r}
+#| message: false
 
 #Computing the poverty rate
 
@@ -90,7 +91,7 @@ reliability_table_2017 <- tract_2017 %>%
       cv <= 40 ~"Somewhat reliable",
       TRUE ~ "Unreliable"
     ),
-    NAME = str_remove(NAME, " County, Pennsylvania")
+    NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")
   )%>%
   arrange(desc(cv))%>%
   select(dot, NAME, rate, rate_moe, cv, flag)
@@ -122,7 +123,7 @@ reliability_table_2017 %>%
   fmt_number(columns = cv, decimals = 1) %>%
   cols_label(
     dot      = "",
-    NAME     = "County",
+    NAME     = "Tract",
     rate = "Poverty Rate Estimate",
     rate_moe      = "Poverty Rate MOE",
     cv       = "CV (%)",
@@ -250,7 +251,9 @@ tract_2017 %>%
 **Some census tracts have NA values, you can see them if you scroll to the very bottom of the reliability tables for 2010 and 2017. Census tracts: 50, 9803-9809 have NaN values, a CV% of 1, and Reliability of Unreliable. This is because the population of these tracts is 0. Thus, why I will choose to exclude them from my written analysis. In the future, I will check for NA values first, then filter the data with the filter(var > 0) for those with population of zero. **
 
 ```{r}
+#| message: false
 
+# Population
 tract_2017_pop <- get_acs(
   geography = "tract",
   variables = "B01003_001",
@@ -265,7 +268,15 @@ tract_2017_pop <- get_acs(
 tract_2017_pop[tract_2017_pop$B01003_001E == "0", ]
 
 ```
-## Part 3
+## Part 3 
+**The article makes numerous claims. The overall claim that poverty across the city has risen in 2013-2017 from 2006-2010 appears to be supported in that  **
 
+## Part 4 Rewriting the central paragraph
+> Being released on Thursday, the U.S. Census Bureau‘s American Community Survey (ACS) Five-Year Estimate for 2013 through 2017 takes a microscope to the city’s formidable 26 percent poverty rate, revealing fault lines of distress and hardship.
+> For example:
+Fairhill in North Philadelphia registered a stunning 61 percent poverty rate.
+The neighborhood of Eastwick in Southwest Philadelphia, near Philadelphia International Airport, showed the greatest poverty-rate increase of any community, rocketing from 12 percent during 2006-10 to 26 percent in the newest survey. That means that even after the recession ended, around a decade ago, conditions in Eastwick have gotten much worse than during the depth of the downturn.
+White poverty throughout much of the city skyrocketed, led by the Northeast neighborhood of Holmesburg, which went from a 2 percent poverty rate to 19 percent.
+The median household income of Tioga-Nicetown plummeted from $28,026 to $17,493, the largest drop in the city.
 
-## Part 4 
+**Revision: The U.S Census Bureau's American Community Survey (ACS) Five Year estimates for 2013-2016 **
