@@ -10,12 +10,262 @@ format:
     code-summary: "Show code"
     embed-resources: true
 ---
-
+```{r}
+#| include: false
+#| message: false
+library(tidyverse)
+library(tidycensus)
+library(gt)
+```
 
 ## Part 1
 
+**In the article, "New Census figures on Philly neighborhoods show inequality, high numbers of whites living in poverty" by Alfred Lubrano for the Philadelphia Media Network, reports on the American Community Survey's 5-year estimate for 2013 reveals a growing number of white people living in poverty in Philadelphia's neighborhoods. Fairhill being the example in the article, explaining that white people in the area never recovered from the recession and face addiction. Also, noting that Eastwick faces a higher number of people living in poverty, suggesting low-income African immigrants are to explain for this change. A number of factors contribute to the poverty crisis in Philadelphia. My report will attempt to evaluate variables and their effects on poverty on a tract-level. I will be analyizing the following variables mentioned in the article; poverty (dependent variable) and race, unemployment, median household income, food security, and immigration status. I will be using numbers from the 5-year estimate for 2006-2010 and 2013-2017, the same years the article used in comparison to make the point that race explains the change in poverty rates in Philadelphia. As the article does not explicitly define the ACS variables they used, I will continue this report under the assumption that 'poverty rates' are the percent below poverty level and that 'whites' are white alone non-Hispanic.**
+
+**include codes !**
+
 ## Part 2
 
+```{r}
+
+#Computing the poverty rate
+
+tract_2010 <- get_acs(
+  geography = "tract",
+  variables = c(poverty_below = "B17001_002", poverty_total = "B17001_001"),
+  state = "PA", county = "Philadelphia",
+  year = 2010, survey = "acs5",
+  output = "wide"
+)
+
+tract_2017 <- get_acs(
+  geography = "tract",
+  variables = c(poverty_below = "B17001_002", poverty_total = "B17001_001"),
+  state = "PA", county = "Philadelphia",
+  year = 2017, survey = "acs5",
+  output = "wide"
+)
+
+tract_2010 <- tract_2010 %>%
+  mutate(
+    rate = poverty_belowE/poverty_totalE,
+    rate_moe = poverty_belowM/poverty_totalM
+  )
+
+tract_2017 <- tract_2017 %>%
+  mutate(
+    rate = poverty_belowE/poverty_totalE,
+    rate_moe = poverty_belowM/poverty_totalM
+  )
+
+#Computing the Coefficient of Variation & Flag reliability (Jurjevich et al. (2018))
+reliability_table_2010 <- tract_2010 %>%
+  mutate(
+    cv = (rate_moe / 1.645) / rate * 100,
+    dot = case_when(
+      cv < 12  ~ "🟢",
+      cv <= 40 ~ "🟡",
+      TRUE     ~ "🔴"
+    ),
+    flag = case_when(
+      cv < 12  ~ "Reliable",
+      cv <= 40 ~ "Somewhat reliable",
+      TRUE     ~ "Unreliable"
+    ),
+    NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")
+  ) %>%
+  arrange(desc(cv)) %>%
+  select(dot, NAME, rate, rate_moe, cv, flag)
+
+reliability_table_2017 <- tract_2017 %>%
+  mutate(
+    cv = (rate_moe/1.645)/rate*100,
+    dot = case_when(
+      cv <12 ~ "🟢",
+      cv <=40 ~ "🟡",
+      TRUE ~ "🔴"
+    ),
+    flag = case_when(
+      cv <12 ~ "Reliable",
+      cv <= 40 ~"Somewhat reliable",
+      TRUE ~ "Unreliable"
+    ),
+    NAME = str_remove(NAME, " County, Pennsylvania")
+  )%>%
+  arrange(desc(cv))%>%
+  select(dot, NAME, rate, rate_moe, cv, flag)
+
+reliability_table_2010 %>%
+  gt() %>%
+  fmt_number(columns = c(rate, rate_moe), decimals = 0) %>%
+  fmt_number(columns = cv, decimals = 1) %>%
+  cols_label(
+    dot      = "",
+    NAME     = "County",
+    rate = "Poverty Rate Estimate",
+    rate_moe      = "Poverty Rate MOE",
+    cv       = "CV (%)",
+    flag     = "Reliability"
+  ) %>%
+  cols_align(align = "center", columns = dot) %>%
+  tab_header(
+    title    = "Poverty Rate Estimates and Reliability ranked by Coefficient of Variation",
+    subtitle = "Philadelphia tracts, ACS 2010 5-year estimates"
+  ) %>%
+  tab_source_note(
+    "Reliability thresholds follow Jurjevich et al. (2018): CV < 12% reliable, 12–40% somewhat reliable, > 40% unreliable."
+  )
+
+reliability_table_2017 %>%
+  gt() %>%
+  fmt_number(columns = c(rate, rate_moe), decimals = 0) %>%
+  fmt_number(columns = cv, decimals = 1) %>%
+  cols_label(
+    dot      = "",
+    NAME     = "County",
+    rate = "Poverty Rate Estimate",
+    rate_moe      = "Poverty Rate MOE",
+    cv       = "CV (%)",
+    flag     = "Reliability"
+  ) %>%
+  cols_align(align = "center", columns = dot) %>%
+  tab_header(
+    title    = "Poverty Rate Estimates and Reliability ranked by Coefficient of Variation",
+    subtitle = "Philadelphia tracts, ACS 2017 5-year estimates"
+  ) %>%
+  tab_source_note(
+    "Reliability thresholds follow Jurjevich et al. (2018): CV < 12% reliable, 12–40% somewhat reliable, > 40% unreliable."
+  )
+
+#Computing the change and change MOE between 2010 and 2017
+get_poverty <- function(yr) {
+  get_acs(
+    geography = "tract",
+    variables = "B07012_002",
+    state     = "PA",
+    county = "Philadelphia",
+    year      = yr,
+    survey    = "acs5"
+  ) %>%
+    mutate(period = paste0(yr - 4, "-", yr))
+}
+
+poverty_change <- bind_rows(
+  get_poverty(2010),
+  get_poverty(2017)
+)
+
+poverty_wide <- poverty_change %>%
+  select(GEOID, NAME, period, estimate, moe) %>%
+  pivot_wider(
+    names_from  = period,
+    values_from = c(estimate, moe)
+  )
+
+# 90% confidence significance test
+poverty_tested <- poverty_wide %>%
+  mutate(
+    change   = `estimate_2006-2010` - `estimate_2013-2017`,
+    se_1     = `moe_2006-2010` / 1.645,
+    se_2     = `moe_2013-2017` / 1.645,
+    se_diff  = sqrt(se_1^2 + se_2^2),
+    moe_diff = se_diff * 1.645,
+    z        = change / se_diff,
+    significant = abs(z) > 1.645
+  )
+
+poverty_tested %>%
+  count(significant)
+
+poverty_tested %>%
+  filter(significant) %>%
+  mutate(NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")) %>%
+  ggplot(aes(x = reorder(NAME, change), y = change)) +
+  geom_col(aes(fill = change > 0)) +
+  geom_errorbar(aes(ymin = change - moe_diff,
+                    ymax = change + moe_diff), width = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Statistically significant change in poverty count by tract in Philadelphia",
+       subtitle = "2006–2010 vs 2013–2017, ACS 5-year estimates",
+       x = NULL, y = "Change in people below poverty level")
+
+# Other charts
+ggplot(tract_2010)+
+  aes(x=rate, y = rate_moe)+
+  geom_point(color = "skyblue")+
+  labs(
+    title = "Poverty rate vs. margin of error",
+    subtitle = "Philadelphia tracts, ACS 2006–2010 5-year estimates",
+    x = "Poverty rate",
+    y = "Margin of error"
+  )
+
+ggplot(tract_2017)+
+  aes(x=rate, y = rate_moe)+
+  geom_point(color = "lightpink")+
+  labs(
+    title = "Poverty rate vs. margin of error",
+    subtitle = "Philadelphia tracts, ACS 2013–2017 5-year estimates",
+    x = "Poverty rate",
+    y = "Margin of error"
+  )
+
+tract_2010 %>%
+  arrange(desc(rate_moe)) %>%
+  mutate(NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")) %>%
+  slice_head(n = 15) %>%
+  ggplot(aes(x = reorder(NAME, rate), y = rate)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = rate - rate_moe, ymax = rate + rate_moe), width = 0.3) +
+  coord_flip() +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "Tracts with the largest margins of error",
+    subtitle = "Poverty Rate, ACS 2010 5-year estimates",
+    x = NULL,
+    y = "Poverty Rate"
+  )
+
+tract_2017 %>%
+  arrange(desc(rate_moe)) %>%
+  mutate(NAME = str_remove(NAME, ", Philadelphia County, Pennsylvania")) %>%
+  slice_head(n = 15) %>%
+  ggplot(aes(x = reorder(NAME, rate), y = rate)) +
+  geom_col(fill = "steelblue") +
+  geom_errorbar(aes(ymin = rate - rate_moe, ymax = rate + rate_moe), width = 0.3) +
+  coord_flip() +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "Tracts with the largest margins of error",
+    subtitle = "Poverty Rate, ACS 2017 5-year estimates",
+    x = NULL,
+    y = "Poverty Rate"
+  )
+
+```
+**Some census tracts have NA values, you can see them if you scroll to the very bottom of the reliability tables for 2010 and 2017. Census tracts: 50, 9803-9809 have NaN values, a CV% of 1, and Reliability of Unreliable. This is because the population of these tracts is 0. Thus, why I will choose to exclude them from my written analysis. In the future, I will check for NA values first, then filter the data with the filter(var > 0) for those with population of zero. **
+
+```{r}
+
+tract_2017_pop <- get_acs(
+  geography = "tract",
+  variables = "B01003_001",
+  state= "PA",
+  county= "Philadelphia",
+  year= 2017,
+  survey = "acs5",
+  output ="wide"
+)
+
+
+tract_2017_pop[tract_2017_pop$B01003_001E == "0", ]
+
+```
 ## Part 3
+
 
 ## Part 4 
