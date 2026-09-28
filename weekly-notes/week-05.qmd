@@ -1,0 +1,51 @@
+---
+title: "Week 5: Machine Learning Basics"
+format: html
+description: CRS stuff
+date: 2026-09-25
+---
+# week 5
+
+## Machine Learning Models:
+
+features = variables = indicators = columns
+
+y = f(x)+ E
+
+- function unknown, E is everything else
+
+m1 ← lm( y ~ x, data = tracts)
+
+summary(m1)
+
+ex.
+
+intercept = 690
+
+- our estimate of y when x = 0
+
+med_inc (x) = 0.0081
+
+0.0081x10,000 → $81/month
+
+- For every 10,000 increase in income, there’s $81 more in predicted rent.
+- null hypothesis: the relationship is zero
+- Noise in Y goes in the residuals because we are only able to predict systematic variation (not noise)
+- Noise in X, flattens the slope
+
+## Fit vs. Prediction
+
+R^2 on the data it was Fit to.
+
+how well does our model do on data we’ve never seen before?
+
+Test and Train data set
+
+- 80% of our data for training, 30% for test
+
+
+# Reflection
+Yay machine learning!
+
+# Questions I still have 
+Will the number of variables we add to a model change the reliability and amount of noise? Like, would we get different results if we run lm(y ~ x) multiple times for different variables or lm (y ~ x + x2+ x3)
