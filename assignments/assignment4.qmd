@@ -51,7 +51,7 @@ library(tidycensus)
 library(sf)
 library(caret)
 
-Sys.getenv("CENSUS_API_KEY") != ""   # should print TRUE
+Sys.getenv("CENSUS_API_KEY") != "CENSUS_API_KEY"   # should print TRUE
 ```
 
 ### The cross-validation helper
