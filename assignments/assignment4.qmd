@@ -114,17 +114,19 @@ Choose **three to five ACS predictors** for your baseline model. They should be 
 
 ```{r}
 #| label: pull
+#| message: false
 philly_tracts <- get_acs(
   geography = "tract",
   state = "PA",
   county = "Philadelphia",
   variables = c(
     total_pop = "B01003_001",
-    # your outcome's numerator and denominator (or median), e.g.:
-    # ___ = "___",
-    # ___ = "___",
+    inet = "B28002_013E", # count of households with no internet access
+    total_hh = "B28002_001E", # count of total households
     # your baseline predictors, e.g.:
-    # ___ = "___"
+    pov = "B17001_002", # % of people in poverty
+    pov_univ  = "B17001_001", # poverty universe (denominator)
+    age65     = "B11007_002" # households with 1+ persons aged 65 and older
   ),
   year = 2023,
   output = "wide",
