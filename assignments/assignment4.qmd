@@ -330,9 +330,11 @@ burglary <- carto_get(
    WHERE dispatch_date >= '2023-01-01' AND dispatch_date < '2024-01-01'
      AND text_general_code = 'Burglary Residential'"
 ) %>%
-  st_transform(st_crs(tracts))    # Carto returns EPSG 4326; translate immediately
+  st_transform(st_crs(tracts)) %>%# Carto returns EPSG 4326; translate immediately
+  filter(!st_is_empty(burglary))
 
 nrow(burglary)
+
 ```
 
 ::: {.callout-warning}
@@ -421,6 +423,7 @@ How far is each tract from its nearest Indego station? Use the Week 4 pattern: f
 
 ```{r}
 #| label: nearest
+#| warning: false
 stations <- st_read("https://www.rideindego.com/stations/json/", quiet = TRUE) %>%
   st_transform(st_crs(tracts))
 
