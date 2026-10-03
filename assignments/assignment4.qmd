@@ -46,6 +46,7 @@ Don't use any variable that's built from your outcome or measures the same thing
 
 ```{r}
 #| label: setup
+#| echo: false
 library(tidyverse)
 library(tidycensus)
 library(sf)
@@ -121,12 +122,14 @@ philly_tracts <- get_acs(
   county = "Philadelphia",
   variables = c(
     total_pop = "B01003_001",
-    inet = "B28002_013E", # count of households with no internet access
-    total_hh = "B28002_001E", # count of total households
+    inet = "B28002_013", # count of households with no internet access
+    total_hh = "B28002_001", # count of total households
     # your baseline predictors, e.g.:
     pov = "B17001_002", # % of people in poverty
     pov_univ  = "B17001_001", # poverty universe (denominator)
-    age65     = "B11007_002" # households with 1+ persons aged 65 and older
+    age65 = "B11007_002", # households with 1+ persons aged 65 and older
+    educ = "B15003_022", # % of people with bachelors degree
+    edu_pop = "B15003_001" # people over 25, denominator for bachelors degree since most children and young adults do not have bachelors degrees lol
   ),
   year = 2023,
   output = "wide",
@@ -140,13 +143,15 @@ philly_tracts <- get_acs(
 philly_tracts <- philly_tracts %>%
   mutate(
     # build your outcome, e.g. a percentage:
-    # y = ___E / ___E * 100,
+    y = inetE / total_hhE * 100,
     # and its reliability. For a percentage, use tidycensus::moe_prop();
     # for a median or count, use the E and M columns directly.
-    # y_moe = ___,
-    # y_cv  = (y_moe / 1.645) / y * 100
+    y_moe = moe_prop(inetE, total_hhE, inetM, total_hhM) * 100,
+    y_cv  = (y_moe / 1.645) / y * 100,
     # your predictors:
-    # ___ = ___
+    pct_pov  = povE / pov_univE * 100, # poverty
+    pct_65   = age65E / total_hhE * 100, # people 65+
+    pct_bach = educE / edu_popE * 100 # college-educated
   )
 ```
 
@@ -156,6 +161,7 @@ Before you commit, check three things.
 
 ```{r}
 #| label: reliability
+#| warning: false
 # How many tracts have no value for your outcome?
 sum(is.na(philly_tracts$y))
 
@@ -191,7 +197,10 @@ Filter once, here, and never again. Every later step uses `tracts`.
 #| label: filter
 tracts <- philly_tracts %>%
   filter(total_popE > 0,
-         !is.na(y)
+         !is.na(y),
+         !is.na(povE),
+         !is.na(age65E),
+         !is.na(educE)
          # add !is.na() for each baseline predictor like in the in-class lab
          )
 
@@ -213,16 +222,26 @@ Plot your outcome against each predictor before modeling (the Week 3 habit).
 
 ```{r}
 #| label: look
+#| message: false
 # one scatterplot per predictor, e.g.:
-# ggplot(tracts, aes(x = ___, y = y)) + geom_point(alpha = 0.5) +
-#   geom_smooth(method = "lm", se = FALSE) + theme_minimal()
+# poverty
+ggplot(tracts, aes(x = povE, y = y)) + geom_point(alpha = 0.5) +
+   geom_smooth(method = "lm", se = FALSE) + theme_minimal()
+
+# age 65+
+ggplot(tracts, aes(x = age65E, y = y)) + geom_point(alpha = 0.5) +
+   geom_smooth(method = "lm", se = FALSE) + theme_minimal()
+
+# college educated
+ggplot(tracts, aes(x = educE, y = y)) + geom_point(alpha = 0.5) +
+   geom_smooth(method = "lm", se = FALSE) + theme_minimal()
 ```
 
 ### 2B: Fit and log
 
 ```{r}
 #| label: m1
-f1 <- y ~ ___ + ___ + ___
+f1 <- y ~ povE + age65E + educE
 
 m1 <- lm(f1, data = tracts)
 summary(m1)
@@ -230,7 +249,7 @@ summary(m1)
 model_log <- model_log %>%
   add_row(model = "m1", added = "ACS baseline",
           cv_rmse = cv_rmse(f1, tracts),
-          notes = "___")
+          notes = "Baseline: poverty, 65+ households, bachelor's count. On tracts it hasn't seen, the baseline model misses by about ___.")
 
 model_log
 ```
