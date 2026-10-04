@@ -129,7 +129,11 @@ philly_tracts <- get_acs(
     pov_univ  = "B17001_001", # poverty universe (denominator)
     age65 = "B11007_002", # households with 1+ persons aged 65 and older
     educ = "B15003_022", # % of people with bachelors degree
-    edu_pop = "B15003_001" # people over 25, denominator for bachelors degree since most children and young adults do not have bachelors degrees lol
+    edu_pop = "B15003_001", # people over 25, denominator for bachelors degree since most children and young adults do not have bachelors degrees lol
+    foreign  = "B05002_013",  # foreign-born population
+    nativity = "B05002_001",  # total population (denominator)
+    renter   = "B25003_003",  # renter-occupied units
+    occ_units = "B25003_001" # total occupied units (denominator)
   ),
   year = 2023,
   output = "wide",
@@ -151,7 +155,9 @@ philly_tracts <- philly_tracts %>%
     # your predictors:
     pct_pov  = povE / pov_univE * 100, # poverty
     pct_65   = age65E / total_hhE * 100, # people 65+
-    pct_bach = educE / edu_popE * 100 # college-educated
+    pct_bach = educE / edu_popE * 100, # college-educated
+    pct_foreign = foreignE / nativityE * 100,
+    pct_renter  = renterE / occ_unitsE * 100
   )
 ```
 
@@ -359,19 +365,24 @@ For example, navigage to https://opendataphilly.org/, find a dataset that you'd 
 landmarks <- st_read("https://hub.arcgis.com/api/v3/datasets/6b2fe4a0fbe14e0a8e6afceaea230b8e_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1")
 
 ### Your turn
-
 Pull **at least two layers** that you think relate to your outcome. Base your choice on your Part 2C answer.
 
 ```{r}
 #| label: my-layers
-layer1 <- carto_get(
-  "SELECT the_geom, ___
-   FROM ___
-   WHERE ___"
-) %>%
-  st_transform(st_crs(tracts))
 
-layer2 <- ___
+layer1 <- st_read(
+  "https://hub.arcgis.com/api/v3/datasets/9eb26a787a6e448ba426eea7f9f0d93a_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1",
+  quiet = TRUE
+) %>%
+  select(park_name, program_type) %>%
+  st_transform(st_crs(philly_tracts))
+
+layer2 <- st_read(
+  "https://hub.arcgis.com/api/v3/datasets/9632f88253da4c03afeda9e8be5cb064_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1",
+  quiet = TRUE
+) %>%
+  select(site_name) %>%
+  st_transform(st_crs(philly_tracts))
 ```
 
 **Answer:** Why these layers? What do you expect them to capture that the ACS variables don't?
