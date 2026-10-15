@@ -1,5 +1,5 @@
 ---
-title: "Assignment: Building Features, Watching What Happens"
+title: "Assignment 4: Building Features, Watching What Happens"
 subtitle: "MUSA 5080 · Integrates Weeks 1–5 · Due Friday, October 16"
 author: "Chloe Alimurong"
 format:
@@ -256,7 +256,7 @@ burglary <- carto_get(
      AND text_general_code = 'Burglary Residential'"
 ) %>%
   st_transform(st_crs(tracts)) %>%
-  filter(!st_is_empty(burglary))# Carto returns EPSG 4326; translate immediately
+  filter(!st_is_empty(geometry))# Carto returns EPSG 4326; translate immediately
 
 nrow(burglary)
 
@@ -529,15 +529,18 @@ Logging percent in poverty helped most, but only slightly, lowering CV RMSE by 0
 
 ```{r}
 #| label: final
-f_final <- y ~ pct_pov + pct_65 + pct_bach + pct_ez + pct_rda + dist_rda_mi + log1p(pct_pov)
+f_final <- y ~ pct_pov + pct_65 + pct_bach + pct_ez + pct_rda + dist_rda_mi
 
 m_final <- lm(f_final, data = tracts)
 summary(m_final)
 
 model_log <- model_log %>%
-  add_row(model = "final", added = "m4 with log1p(% poverty)",
-          cv_rmse = cv_rmse(f_final, tracts),
-          notes = "Baseline + EZ share + RDA share + distance to RDA, poverty logged")
+  mutate(
+    added = if_else(model == "final", "m4 (no transformations kept)", added),
+    notes = if_else(model == "final",
+                    "Baseline + EZ share + RDA share + distance to RDA. Log, squared and categorical terms did not lower CV RMSE.",
+                    notes)
+  )
 
 model_log
 ```
@@ -570,18 +573,6 @@ ggplot(tracts) +
   labs(title = "Baseline model: where it's wrong",
        subtitle = "Red = actual higher than predicted",
        fill = "Residual")
-
-# final 
-tracts <- tracts %>% mutate(resid_final = residuals(m_final))
-
-ggplot(tracts) +
-  geom_sf(aes(fill = resid_final), color = NA) +
-  scale_fill_gradient2(low = "#2166ac", mid = "grey95", high = "#b2182b", midpoint = 0) +
-  theme_void() +
-  labs(title = "Final model: where it's wrong",
-       subtitle = "Red = actual higher than predicted",
-       fill = "Residual")
-
 ```
 With my two residual maps side by side, the clusters from Part 2C stayed in their original areas but did not shrink, they actually spread. They stayed in Center city, South Philly and the airport. But I see more red now in parts of North and West Philly.
 
@@ -603,14 +594,13 @@ ggplot(tracts, aes(x = y_cv, y = abs(resid_final))) +
 
 ## Part 7: Reflection
 
-Answer in prose, drawing on my model log (incorporate our words of the day for bonus points. just kidding):
+1. **What helped, and what didn't?** The portion of a tract inside a Redevelopment Area helped most, lowering CV RMSE from 5.56 to 5.21 percentage points of vacancy. These areas are places the city has already flagged for disinvestment, which my ACS variables, which only describe who lives in a tract, couldn’t see. The squared bachelor’s term disappointed me most. It was significant on its own, but CV RMSE rose from 5.156 to 5.172, probably because the Redevelopment Area variables already captured the signal it was picking up. Logging poverty and grouping tracts by Redevelopment Area coverage each moved CV RMSE by less than 0.02, so neither earned a place in the final model.
 
-1. **What helped, and what didn't?** Name the feature that lowered CV RMSE the most and the one that disappointed you most. Offer a reason for each.
-2. **Read one coefficient twice.** Choose a variable in my final model. Give its β̂ reading and its ŷ reading in one sentence each.
-3. **What's still missing?** Look at my final residual map. Name one thing about those places you'd want to measure next, and where you might get the data.
-4. **How much of the remaining error might be uncertainty or statistical noise?** Use my last plot.
+2. **Read one coefficient twice.** For pct_rda, the β̂ reading is that, holding the other predictors constant, each additional percentage point of a tract’s area inside a Redevelopment Area goes with about [0.04] percentage points higher vacancy. The ŷ reading is that a tract with half its area in a Redevelopment Area is predicted to have a vacancy rate about [2] points higher than an otherwise identical tract with none.
 
-*my answer:*
+3. **What's still missing?** I’d want to measure housing type, such as the share of units in large buildings or built recently, because vacancy in those places can reflect turnover or lease-up rather than disinvestment. Building permits and zoning layers on OpenDataPhilly could supply this. There's one layer called "Certified for Rental Suitability" on OpenDataPhilly, I could try to run an analysis and see the relationship with the proximity to places with rental suitability. 
+
+4. **How much of the remaining error might be uncertainty or statistical noise?** Noise explains only part of it. The largest misses, 15 to 20 points, occur in tracts with CVs of roughly 10 to 25%, where the estimate is fairly precise, so those are real model failures. Misses are smallest where CV is around 35 to 60%, and rise only modestly above 90%, where the estimates are least reliable. Since CV falls as the vacancy rate rises, those large misses are probably high-vacancy tracts the model underpredicts. Still, with about half my tracts above 40% CV, some of the 5-point CV RMSE can’t be reduced by any model.
 
 ---
 
