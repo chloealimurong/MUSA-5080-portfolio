@@ -521,25 +521,23 @@ model_log <- model_log %>%
 
 model_log
 ```
-The log transformation of percent of people in poverty did not help, it only improved the CV RMSE slightly by 0.017. Similarly, the squared result of the households with a bachelors degree or higher did not make a significant difference in CV RMSE, only a 0.016 increase. The categorical model also did not help, it only resulted in the lowest CV RMSE of 5.16, a 0.006 difference from the original model. Tracts with at least half their area in a Redevelopment Area (categorical variable) have a predicted vacancy rate about 5.6 percentage points higher than tracts not in RDA. 
+Logging percent in poverty helped most, but only slightly, lowering CV RMSE by 0.017 (5.156 to 5.139), which is within noise. The squared bachelor’s term did not help (CV RMSE rose by 0.016), and neither did the categorical Redevelopment Area variable (rose by 0.006). So none of the transformations meaningfully improved on the model before them. Tracts with at least half their area in a Redevelopment Area have a predicted vacancy rate about 5.6 percentage points higher than tracts not in one (the reference level, “Not in RDA”).
 
 ---
 
 ## Part 6: Your final model
 
-Combine the features and transformations that earned their place, **judged by CV RMSE, not p-values.**
-
 ```{r}
 #| label: final
-f_final <- y ~ ___
+f_final <- y ~ pct_pov + pct_65 + pct_bach + pct_ez + pct_rda + dist_rda_mi + log1p(pct_pov)
 
 m_final <- lm(f_final, data = tracts)
 summary(m_final)
 
 model_log <- model_log %>%
-  add_row(model = "final", added = "___",
+  add_row(model = "final", added = "m4 with log1p(% poverty)",
           cv_rmse = cv_rmse(f_final, tracts),
-          notes = "___")
+          notes = "Baseline + EZ share + RDA share + distance to RDA, poverty logged")
 
 model_log
 ```
@@ -559,12 +557,41 @@ ggplot(tracts) +
        fill = "Residual")
 ```
 
-Put your two residual maps side by side, or put them next to each other in the rendered document. Did the clusters from Part 2C shrink? Where did they stay?
+```{r}
+#| label: side by side
+
+# baseline
+tracts <- tracts %>% mutate(resid_m1 = residuals(m1))
+
+ggplot(tracts) +
+  geom_sf(aes(fill = resid_m1), color = NA) +
+  scale_fill_gradient2(low = "#2166ac", mid = "grey95", high = "#b2182b", midpoint = 0) +
+  theme_void() +
+  labs(title = "Baseline model: where it's wrong",
+       subtitle = "Red = actual higher than predicted",
+       fill = "Residual")
+
+# final 
+tracts <- tracts %>% mutate(resid_final = residuals(m_final))
+
+ggplot(tracts) +
+  geom_sf(aes(fill = resid_final), color = NA) +
+  scale_fill_gradient2(low = "#2166ac", mid = "grey95", high = "#b2182b", midpoint = 0) +
+  theme_void() +
+  labs(title = "Final model: where it's wrong",
+       subtitle = "Red = actual higher than predicted",
+       fill = "Residual")
+
+```
+With my two residual maps side by side, the clusters from Part 2C stayed in their original areas but did not shrink, they actually spread. They stayed in Center city, South Philly and the airport. But I see more red now in parts of North and West Philly.
 
 ### Are the biggest misses in the least reliable tracts?
 
 ```{r}
 #| label: fog
+#| warning: false
+#| message: false
+
 ggplot(tracts, aes(x = y_cv, y = abs(resid_final))) +
   geom_point(alpha = 0.5) +
   geom_smooth(se = FALSE) +
@@ -586,8 +613,4 @@ Answer in prose, drawing on your model log (incorporate our words of the day for
 *Your answer:*
 
 ---
-
-## Submitting
-
-Render this document to HTML and submit the link on Canvas by Friday, October 16. I'll miss you all terribly while I'm away. Please send letters or correspondences to my office mailbox. 
 
