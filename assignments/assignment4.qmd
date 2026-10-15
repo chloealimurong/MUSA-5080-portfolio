@@ -64,12 +64,12 @@ model_log <- tibble(
 
 ---
 
-## Part 1: Choose your outcome
+## Part 1: Choose my outcome
 % of housing units vacant | Housing and blight | B25002 |
 
-### 1A: Pull your outcome and your baseline predictors
+### 1A: Pull my outcome and my baseline predictors
 
-Choose **three to five ACS predictors** for your baseline model. They should be things that plausibly relate to your outcome, but **none of them may be built from your outcome** (Rule 3).
+Choose **three to five ACS predictors** for my baseline model. They should be things that plausibly relate to my outcome, but **none of them may be built from my outcome** (Rule 3).
 
 ```{r}
 #| label: pull
@@ -83,7 +83,7 @@ philly_tracts <- get_acs(
     units = "B25002_001",  # total housing units (denominator)
     vacant    = "B25002_003",  # vacant housing units
     total_hh  = "B28002_001",
-    # your baseline predictors, e.g.:
+    # my baseline predictors, e.g.:
     pov = "B17001_002", # % of people in poverty
     pov_univ  = "B17001_001", # poverty universe (denominator)
     age65 = "B11007_002", # households with 1+ persons aged 65 and older
@@ -104,11 +104,11 @@ philly_tracts <- get_acs(
 #| label: build-outcome
 philly_tracts <- philly_tracts %>%
   mutate(
-    # build your outcome, e.g. a percentage:
+    # build my outcome, e.g. a percentage:
     y = vacantE / unitsE * 100,
     y_moe = moe_prop(vacantE, unitsE, vacantM, unitsM) * 100,
     y_cv  = (y_moe / 1.645) / y * 100,
-    # your predictors:
+    # my predictors:
     pct_pov  = povE / pov_univE * 100, # poverty
     pct_65   = age65E / total_hhE * 100, # people 65+
     pct_bach = educE / edu_popE * 100, # college-educated
@@ -124,7 +124,7 @@ Before you commit, check three things.
 ```{r}
 #| label: reliability
 #| warning: false
-# How many tracts have no value for your outcome?
+# How many tracts have no value for my outcome?
 sum(is.na(philly_tracts$y))
 
 # How reliable is it?
@@ -292,7 +292,7 @@ These two layers I found exploring on OpenDataPhilly. Empowerment Zones are spec
 
 ## Part 4: Building spatial features
 
-Every feature below reuses a Week 4 tool. The worked examples use burglaries and Indego stations; you build the same types from your own layers.
+Every feature below reuses a Week 4 tool. The worked examples use burglaries and Indego stations; you build the same types from my own layers.
 
 ### 4A: Counting
 
@@ -354,7 +354,7 @@ tracts <- tracts %>%
   mutate(dist_ch_mi = as.numeric(st_distance(tract_pts, city_hall)) / 5280)
 ```
 
-### 4E: Your turn
+### 4E: my turn
 
 ```{r}
 #| label: my-spatial
@@ -418,7 +418,7 @@ ggplot(tracts, aes(x = log1p(burglary_per_sqmi))) + geom_histogram(bins = 30) + 
 
 ### 5B: Squared terms, for curves
 
-If your scatterplot bends (rising and then flattening, or falling and then rising), a squared term lets the line curve. Write it with `I()`, which tells R to do the arithmetic rather than read `^` as formula syntax.
+If my scatterplot bends (rising and then flattening, or falling and then rising), a squared term lets the line curve. Write it with `I()`, which tells R to do the arithmetic rather than read `^` as formula syntax.
 
 ```{r}
 #| label: squared-example
@@ -474,7 +474,7 @@ tracts %>%
   theme_minimal()
 ```
 
-### 5D: Your turn
+### 5D: My turn
 
 ```{r}
 #| label: my-transforms
@@ -525,7 +525,7 @@ Logging percent in poverty helped most, but only slightly, lowering CV RMSE by 0
 
 ---
 
-## Part 6: Your final model
+## Part 6: Final model
 
 ```{r}
 #| label: final
@@ -595,22 +595,22 @@ With my two residual maps side by side, the clusters from Part 2C stayed in thei
 ggplot(tracts, aes(x = y_cv, y = abs(resid_final))) +
   geom_point(alpha = 0.5) +
   geom_smooth(se = FALSE) +
-  labs(x = "CV of your outcome estimate (%)", y = "Size of the miss") +
+  labs(x = "CV of my outcome estimate (%)", y = "Size of the miss") +
   theme_minimal()
 ```
 
 ---
 
-## Part 7: Reflection (about 300 words)
+## Part 7: Reflection
 
-Answer in prose, drawing on your model log (incorporate our words of the day for bonus points. just kidding):
+Answer in prose, drawing on my model log (incorporate our words of the day for bonus points. just kidding):
 
 1. **What helped, and what didn't?** Name the feature that lowered CV RMSE the most and the one that disappointed you most. Offer a reason for each.
-2. **Read one coefficient twice.** Choose a variable in your final model. Give its β̂ reading and its ŷ reading in one sentence each.
-3. **What's still missing?** Look at your final residual map. Name one thing about those places you'd want to measure next, and where you might get the data.
-4. **How much of the remaining error might be uncertainty or statistical noise?** Use your last plot.
+2. **Read one coefficient twice.** Choose a variable in my final model. Give its β̂ reading and its ŷ reading in one sentence each.
+3. **What's still missing?** Look at my final residual map. Name one thing about those places you'd want to measure next, and where you might get the data.
+4. **How much of the remaining error might be uncertainty or statistical noise?** Use my last plot.
 
-*Your answer:*
+*my answer:*
 
 ---
 
