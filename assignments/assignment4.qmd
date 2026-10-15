@@ -13,35 +13,6 @@ execute:
 freeze: false
 ---
 
-## What this assignment is (and isn't)
-
-You'll:
-
-1. Choose a tract-level outcome for Philadelphia and check whether it's reliable enough to model (Weeks 2–3).
-2. Fit a baseline model and cross-validate it (Week 5).
-3. Pull data from Philadelphia's open data portal through its API and build spatial features: counts, densities, and distances (Week 4, plus one new tool).
-4. Transform variables with logs, squared terms, and categories. **Watch the October 9 recorded lecture before Part 5.**
-5. Keep a **model log** the whole way through, and compare where your first and final models go wrong.
-
-**Timing.** Parts 1–4 use only what we've covered through Week 5. You can finish them before the October 9 lecture. Part 5 is new material; the lecture explains it, and the instructions below give you the essentials.
-
-**Type the code yourself.** The worked examples show the pattern. Your job is to apply it to your outcome and your data choices.
-
-### Three rules that apply everywhere
-
-::: {.callout-important}
-## 1. Don't drop rows
-Every model is cross-validated on the same tracts with the same folds, so the rows in your model log are comparable. If a new variable has missing values, fill them (for example, 0 for a count, or the median with a note) or choose a different variable. The `cv_rmse()` helper below will stop and tell you if you break this rule.
-
-## 2. Stay inside the time window
-Your outcome comes from the 2019–2023 ACS. Pull open data from **2023 or earlier** (2021–2023 is ideal). Using 2025 data to predict a 2023 outcome uses information from the future, which a real prediction model would never have.
-
-## 3. No leakage
-Don't use any variable that's built from your outcome or measures the same thing another way. Ask yourself: *would an agency trying to predict this outcome for a tract have this variable?* If the answer is "only because it's basically the outcome," leave it out.
-:::
-
----
-
 ## Part 0: Setup
 
 ```{r}
@@ -57,7 +28,7 @@ Sys.getenv("CENSUS_API_KEY") != "CENSUS_API_KEY"   # should print TRUE
 
 ### The cross-validation helper
 
-This function runs 10-fold cross-validation with the same seed every time, so every model in your log is tested on the same folds. **You don't need to change it.** Read it once so you know what it does.
+This function runs 10-fold cross-validation with the same seed every time, so every model in my log is tested on the same folds.
 
 ```{r}
 #| label: cv-helper
@@ -79,7 +50,7 @@ cv_rmse <- function(formula, data) {
 
 ### The model log
 
-Every time you fit a new model, add a row. By the end, this table is the story of your assignment.
+Every time I fit a new model, I add a row. By the end, this table is the story of my assignment.
 
 ```{r}
 #| label: log-start
@@ -94,20 +65,7 @@ model_log <- tibble(
 ---
 
 ## Part 1: Choose your outcome
-
-Pick a **tract-level ACS variable for Philadelphia** that matters for policy. Two outcomes are off limits: median gross rent (we did it in lab) and median home value (save it for A4).
-
-Some ideas if you're stuck:
-
-| Outcome | Why an agency might care | ACS table |
-|---|---|---|
-| % of households with no vehicle | Transit planning | B08201 or B25044 |
-| Mean travel time to work | Access to jobs | B08013_001 ÷ B08303_001 |
-| % of people below poverty | Targeting services | B17001 |
-| % of housing units vacant | Housing and blight | B25002 |
-| % of households overcrowded | Housing conditions | B25014 |
-
-Use `load_variables(2023, "acs5")` to browse and find exact variable codes.
+% of housing units vacant | Housing and blight | B25002 |
 
 ### 1A: Pull your outcome and your baseline predictors
 
@@ -122,8 +80,9 @@ philly_tracts <- get_acs(
   county = "Philadelphia",
   variables = c(
     total_pop = "B01003_001",
-    inet = "B28002_013", # count of households with no internet access
-    total_hh = "B28002_001", # count of total households
+    units = "B25002_001",  # total housing units (denominator)
+    vacant    = "B25002_003",  # vacant housing units
+    total_hh  = "B28002_001",
     # your baseline predictors, e.g.:
     pov = "B17001_002", # % of people in poverty
     pov_univ  = "B17001_001", # poverty universe (denominator)
@@ -131,7 +90,6 @@ philly_tracts <- get_acs(
     educ = "B15003_022", # % of people with bachelors degree
     edu_pop = "B15003_001", # people over 25, denominator for bachelors degree since most children and young adults do not have bachelors degrees lol
     foreign  = "B05002_013",  # foreign-born population
-    nativity = "B05002_001",  # total population (denominator)
     renter   = "B25003_003",  # renter-occupied units
     occ_units = "B25003_001" # total occupied units (denominator)
   ),
@@ -147,16 +105,14 @@ philly_tracts <- get_acs(
 philly_tracts <- philly_tracts %>%
   mutate(
     # build your outcome, e.g. a percentage:
-    y = inetE / total_hhE * 100,
-    # and its reliability. For a percentage, use tidycensus::moe_prop();
-    # for a median or count, use the E and M columns directly.
-    y_moe = moe_prop(inetE, total_hhE, inetM, total_hhM) * 100,
+    y = vacantE / unitsE * 100,
+    y_moe = moe_prop(vacantE, unitsE, vacantM, unitsM) * 100,
     y_cv  = (y_moe / 1.645) / y * 100,
     # your predictors:
     pct_pov  = povE / pov_univE * 100, # poverty
     pct_65   = age65E / total_hhE * 100, # people 65+
     pct_bach = educE / edu_popE * 100, # college-educated
-    pct_foreign = foreignE / nativityE * 100,
+    pct_foreign = foreignE / total_popE * 100,
     pct_renter  = renterE / occ_unitsE * 100
   )
 ```
@@ -188,16 +144,9 @@ ggplot(philly_tracts, aes(x = y)) +
   geom_histogram(bins = 30) +
   theme_minimal()
 ```
-
-If more than about a third of tracts have low reliability, consider a different outcome, or one built from larger counts. Write your reasoning either way.
-
-**Answer (2–3 sentences):** What is your outcome, why would an agency want to predict it, and how reliable is it?
-
-*Your answer:*
+My outcome is the percent of housing units that are vacant in each Philadelphia tract. There are a couple of reasons agencies may want to predict vacancies. Local law enforcement may want to target specific neighborhoods with higher vacancies for different housing violations (eg. unauthorized occupation). Developers may also want to predict vacancies to determine whether land is up for grabs or if there's other reasons contributing to vacancies in a neighborhood. These reasons tell us about the housing market and overall state of a neighborhood from a data perspective. From the results above, over 50% of the tracts have low reliability (208). This is to be expected, since vacant units make up a very small portion of overall housing units in a big city. Making that small portion  With this in mind, I will continue with the outcome I've selected as the information is still relevant to different housing policies for different types of agencies. Even though there may be noise, I will interpret these results more cautiously.
 
 ### 1C: Decide which tracts to model
-
-Filter once, here, and never again. Every later step uses `tracts`.
 
 ```{r}
 #| label: filter
@@ -207,24 +156,18 @@ tracts <- philly_tracts %>%
          !is.na(povE),
          !is.na(age65E),
          !is.na(educE)
-         # add !is.na() for each baseline predictor like in the in-class lab
          )
 
 nrow(philly_tracts)
 nrow(tracts)
 ```
-
-**Answer:** How many tracts did you lose, and what kinds of places are they?
-
-*Your answer:*
+I lost 20 tracts in my filtration process. These are tracts where there is no population data, no data for me to compare my variables to. In Philadelphia, these are tracts near the airport, large industrial/recreational parks like Navy Yard and Fairmount park. Just huge swaths of land with no people to live there or predict on.
 
 ---
 
 ## Part 2: Baseline model
 
 ### 2A: Look first
-
-Plot your outcome against each predictor before modeling (the Week 3 habit).
 
 ```{r}
 #| label: look
@@ -255,17 +198,14 @@ summary(m1)
 model_log <- model_log %>%
   add_row(model = "m1", added = "ACS baseline",
           cv_rmse = cv_rmse(f1, tracts),
-          notes = "Baseline: poverty, 65+ households, bachelor's count. On tracts it hasn't seen, the baseline model misses by about ___.")
+          notes = "Baseline: poverty, 65+ households, bachelor's count. On tracts it hasn't seen, the baseline model misses by about 5.76.")
 
 model_log
 ```
 
-Write the CV RMSE as a sentence, in your outcome's units: "On tracts it hasn't seen, the baseline model misses by about ___."
+On tracts it hasn't seen, the baseline model misses by about 5.76.
 
 ### 2C: Where is the baseline wrong?
-
-Save this map. You'll compare it to your final model's map in Part 6.
-
 ```{r}
 #| label: resid-map-1
 tracts <- tracts %>% mutate(resid_m1 = residuals(m1))
@@ -278,30 +218,11 @@ ggplot(tracts) +
        subtitle = "Red = actual higher than predicted",
        fill = "Residual")
 ```
-
-**Answer:** Where do the residuals cluster? What might those places have in common that your model doesn't know about? **Use this answer to choose your open data layers in Part 3.**
-
-*Your answer:*
+The residuals cluster around Center City, South Philly and the airport regions. These areas may not seem super common from a glance at this model. However, I think that there's a number of physical attributes to explore that these areas share. First, the land-use types. In popular high-traffic areas like Center City, there may be more commercial units than residential. Paces like the Navy Yard in South Philly and the airport may also have more land-use types for industrial and commercial types. Second, housing density, there may just be less houses in these areas in general. 
 
 ---
 
 ## Part 3: Getting data from Philadelphia's open data portal
-
-Many of the city's datasets on [OpenDataPhilly](https://opendataphilly.org) are served through a **Carto SQL API**. You send a SQL query in a URL, and it sends back data. Ask for `format=GeoJSON` and `st_read()` reads the result directly, just like the Indego feed in Week 4.
-
-The pattern:
-
-```
-https://phl.carto.com/api/v2/sql?format=GeoJSON&q=SELECT ... FROM table_name WHERE ...
-```
-
-Three pieces of SQL are all you need:
-
-- `SELECT the_geom, column1, column2` chooses which columns come back. **Always include `the_geom`**, or you get no geometry.
-- `FROM table_name` chooses the dataset.
-- `WHERE ...` filters rows. **Filter in the query, not in R.** Some tables have millions of rows, and pulling everything will be slow or fail.
-
-This helper builds the URL for you. Spaces and symbols in a URL need encoding, and `URLencode()` handles that.
 
 ```{r}
 #| label: carto-helper
@@ -312,8 +233,6 @@ carto_get <- function(sql) {
 ```
 
 ### Finding a table name
-
-On a dataset's OpenDataPhilly page, look for the API link. The table name is the word after `FROM` in the example query. To see what values a column takes before you filter on it, ask for a count in CSV format:
 
 ```{r}
 #| label: explore-values
@@ -336,58 +255,38 @@ burglary <- carto_get(
    WHERE dispatch_date >= '2023-01-01' AND dispatch_date < '2024-01-01'
      AND text_general_code = 'Burglary Residential'"
 ) %>%
-  st_transform(st_crs(tracts)) %>%# Carto returns EPSG 4326; translate immediately
-  filter(!st_is_empty(burglary))
+  st_transform(st_crs(tracts)) %>%
+  filter(!st_is_empty(burglary))# Carto returns EPSG 4326; translate immediately
 
 nrow(burglary)
 
 ```
 
-::: {.callout-warning}
-## Check for missing geometry
-Some records have no location. Drop them with `filter(!st_is_empty(burglary))`, and count how many you lost. Every point you drop is a point that won't be counted.
-:::
+In the filtration process of removing records with no location, we lost a total of 61 records and ended up with a total of 3681 records.
 
 ### Other layers to try
-
-These tables were available on Carto as of this fall. If a query fails, check the dataset's OpenDataPhilly page for the current table name.
-
-| Data | Table | Filter on | Notes |
-|---|---|---|---|
-| Crime incidents | `incidents_part1_part2` | `dispatch_date`, `text_general_code` | Pick specific offense types |
-| Shooting victims | `shootings` | `date_` | Small enough to pull several years |
-| 311 requests | `public_cases_fc` | `requested_datetime`, `service_name` | Use the count query above to see service names |
-| Indego stations | *(not Carto)* `https://www.rideindego.com/stations/json/` | — | The Week 4 feed |
-
-Datasets not on Carto often have a GeoJSON download link on their OpenDataPhilly page. `st_read()` reads those URLs too.
-For example, navigage to https://opendataphilly.org/, find a dataset that you'd like to import. I found city landmarks. On the page there is a link to a GeoJSON file. I simply right-clicked on that hyperlink and copied it and then used st_read() and pasted the link: 
-
-landmarks <- st_read("https://hub.arcgis.com/api/v3/datasets/6b2fe4a0fbe14e0a8e6afceaea230b8e_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1")
-
-### Your turn
-Pull **at least two layers** that you think relate to your outcome. Base your choice on your Part 2C answer.
 
 ```{r}
 #| label: my-layers
 
+## Empowerment Zones
 layer1 <- st_read(
-  "https://hub.arcgis.com/api/v3/datasets/9eb26a787a6e448ba426eea7f9f0d93a_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1",
+  "https://hub.arcgis.com/api/v3/datasets/78fa563815654742909159b53fa4b065_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1",
   quiet = TRUE
 ) %>%
-  select(park_name, program_type) %>%
+  select(ZONE_NAME) %>%
   st_transform(st_crs(philly_tracts))
 
+## Redevelopment Certified Areas
 layer2 <- st_read(
-  "https://hub.arcgis.com/api/v3/datasets/9632f88253da4c03afeda9e8be5cb064_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1",
+  "https://hub.arcgis.com/api/v3/datasets/80f2c71305f5493c8e0aab9137354844_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1",
   quiet = TRUE
 ) %>%
-  select(site_name) %>%
+  select(CORRESPREDEVPLAN) %>%
   st_transform(st_crs(philly_tracts))
 ```
 
-**Answer:** Why these layers? What do you expect them to capture that the ACS variables don't?
-
-*Your answer:*
+These two layers I found exploring on OpenDataPhilly. Empowerment Zones are specific commercial and/or industrial zones with grants from the government to attract business to the area. This tells me that there are likely to be less residential units in the area or there's too much going on, making people move out. The second layer, Redevelopment Certified Areas are areas determined by the Philadelphia Planning Commission as blighted and eligible for urban renewal. These areas may have more vacancies due to being a blighted neighborhood. These types of variables are more spatial than the ACS variables since they are descriptors of areas of land. Whereas the ACS variables tell us more about the people living on the land (tracts).
 
 ---
 
@@ -423,11 +322,6 @@ tracts <- tracts %>%
   )
 ```
 
-::: {.callout-note}
-## Per capita in low-population tracts
-If a tract has 40 residents and 3 burglaries, its rate is 75 per 1,000, which is a huge number built on tiny counts. Look at the tracts with the highest per-capita rates before you trust them. This is the Week 3 lesson about small denominators again.
-:::
-
 ### 4C: Measuring distance to the nearest thing
 
 How far is each tract from its nearest Indego station? Use the Week 4 pattern: find the nearest feature, then measure to it **element by element**.
@@ -462,40 +356,55 @@ tracts <- tracts %>%
 
 ### 4E: Your turn
 
-Build **at least three spatial features** from your own layers, and use at least two types (count, density, nearest distance, distance to a place). After **each one**, fit a model, cross-validate it, and log it.
-
 ```{r}
 #| label: my-spatial
+#| warning: false
+
+# Merge overlapping polygons so nothing is double-counted
+ez  <- layer1 %>% st_make_valid() %>% st_union()
+rda <- layer2 %>% st_make_valid() %>% st_union()
+
+# % of each tract's area covered by a polygon layer
+pct_in <- function(poly) {
+  covered <- st_intersection(select(tracts, GEOID), poly) %>%
+    mutate(a = as.numeric(st_area(.))) %>%
+    st_drop_geometry() %>%
+    group_by(GEOID) %>%
+    summarize(a = sum(a))
+
+  a <- covered$a[match(tracts$GEOID, covered$GEOID)]
+  replace_na(a, 0) / as.numeric(st_area(tracts)) * 100
+}
+
+# Build the three features
 tracts <- tracts %>%
-  mutate(___ = ___)
+  mutate(
+    pct_ez = pct_in(ez),
+    pct_rda = pct_in(rda),
+    dist_rda_mi = as.numeric(st_distance(., rda)) / 5280
+  )
 
-f2 <- y ~ ___
+# Add a row to the model log
+log_model <- function(name, added, formula, notes = "___") {
+  model_log <<- model_log %>%
+    add_row(model = name, added = added,
+            cv_rmse = cv_rmse(formula, tracts), notes = notes)
+}
 
-model_log <- model_log %>%
-  add_row(model = "m2", added = "___",
-          cv_rmse = cv_rmse(f2, tracts),
-          notes = "___")
+base <- y ~ pct_pov + pct_65 + pct_bach
 
-# repeat for each feature
-model_log
+log_model("m2", "% in Empowerment Zone",         update(base, . ~ . + pct_ez))
+log_model("m3", "% in Redevelopment Area",       update(base, . ~ . + pct_ez + pct_rda))
+log_model("m4", "distance to Redevelopment Area", update(base, . ~ . + pct_ez + pct_rda + dist_rda_mi))
+
+model_log %>% mutate(change = cv_rmse - lag(cv_rmse))
 ```
 
-**Answer:** Which spatial feature helped most? Did any feature you expected to help do nothing, or make CV RMSE worse? Why might that be?
-
-*Your answer:*
+The Spatial Feature that helped the most was the Empowerment Zone layer, overall, there was a negative change in CV RMSE for this layer. This means models like m3 (-0.35) lowered the prediction error. Whereas, for the Redevelopment Area, models like m4 increased the CV RMSE by 0.41, making it slightly worse. This could be because the layer is not tied to vacancy as much as I predicted. Or, that the layer overlaps with other layers like the redevleopment area causing it to have a distance of zero.
 
 ---
 
 ## Part 5: Transforming features
-
-**Watch the October 9 recorded lecture before you start this part.** Below is a summary to work from.
-
-So far, every predictor has entered the model as a straight line: each additional unit of X changes predicted Y by the same amount, everywhere. Transformations let the model bend. For prediction, the question is simply **does the bend lower CV RMSE?** For interpretation, each transformation changes what a coefficient means, so you need to know how to read it.
-
-::: {.callout-tip}
-## Transform predictors, not your outcome
-Keep your outcome `y` untransformed in this assignment. If you model `log(y)`, your CV RMSE comes out in log units and can't be compared to the other rows in your log. (Predicting a logged outcome well requires back-transforming, which is an A4 topic.)
-:::
 
 ### 5A: Logs, for skewed predictors
 
@@ -507,13 +416,6 @@ ggplot(tracts, aes(x = burglary_per_sqmi)) + geom_histogram(bins = 30) + theme_m
 ggplot(tracts, aes(x = log1p(burglary_per_sqmi))) + geom_histogram(bins = 30) + theme_minimal()
 ```
 
-::: {.callout-warning}
-## log(0) doesn't exist
-`log(0)` is `-Inf`, and it will break your model. Counts and densities often include zeros. Use `log1p(x)`, which computes `log(x + 1)`, for anything that can be 0.
-:::
-
-**Reading the coefficient:** when a predictor is logged, a **1% increase** in X goes with a change of about **β/100** in Y, in Y's units. With `log1p`, this reading is approximate for small values of X.
-
 ### 5B: Squared terms, for curves
 
 If your scatterplot bends (rising and then flattening, or falling and then rising), a squared term lets the line curve. Write it with `I()`, which tells R to do the arithmetic rather than read `^` as formula syntax.
@@ -524,8 +426,6 @@ m_sq <- lm(y ~ dist_ch_mi + I(dist_ch_mi^2), data = tracts)
 summary(m_sq)
 ```
 
-**Reading the coefficient:** you can't read either coefficient alone anymore. The effect of X depends on where you are along X. A positive linear term with a negative squared term means Y rises with X and then levels off or turns down. Plot the fitted curve to see it:
-
 ```{r}
 #| label: squared-plot
 ggplot(tracts, aes(x = dist_ch_mi, y = y)) +
@@ -535,8 +435,6 @@ ggplot(tracts, aes(x = dist_ch_mi, y = y)) +
 ```
 
 ### 5C: Categorical variables
-
-Sometimes a number works better as groups, either because the relationship isn't smooth or because the categories are meaningful. You can make categories from any variable with `case_when()` or `cut()`, and then make sure R treats them as a **factor**.
 
 ```{r}
 #| label: categorical-example
@@ -556,36 +454,74 @@ m_cat <- lm(y ~ ring, data = tracts)
 summary(m_cat)
 ```
 
-**Reading the coefficients:** R turns a factor with k categories into k − 1 dummy variables. The category left out is the **reference level** (here, "Core," the first level). Each coefficient is the **difference from the reference**: `ringOuter` is how much higher or lower predicted Y is in outer tracts *compared to core tracts*, holding everything else in the model constant. To change the reference, use `relevel(ring, ref = "Outer")`.
-
-::: {.callout-note}
-## Check your group sizes
-If a category has only a handful of tracts, its coefficient is unstable, and in cross-validation some folds may not contain it at all. Aim for at least 20 tracts per category.
-:::
+```{r}
+#| label: me figuring out what to log
+#| echo: false
+#| message: false
+#| warning: false
+#ggplot(tracts, aes(x = pct_pov)) + geom_histogram(bins = 30) + theme_minimal()
+#ggplot(tracts, aes(x = log1p(pct_pov))) + geom_histogram(bins = 30) + theme_minimal()
+tracts %>%
+  st_drop_geometry() %>%
+  select(y, pct_pov, pct_65, pct_bach, pct_foreign, pct_renter,
+         pct_ez, pct_rda, dist_rda_mi) %>%
+  pivot_longer(-y) %>%
+  ggplot(aes(value, y)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  geom_smooth(se = FALSE, color = "red") +
+  facet_wrap(~name, scales = "free_x") +
+  theme_minimal()
+```
 
 ### 5D: Your turn
 
-Try **at least one of each**: a log, a squared term, and a categorical variable. Choose which variables to transform based on your plots, not at random. Log each model.
-
 ```{r}
 #| label: my-transforms
-f_log <- y ~ ___
+
+# log term: % in poverty
+f_log <- y ~ log1p(pct_pov) + pct_65 + pct_bach + pct_ez + pct_rda + dist_rda_mi
 
 model_log <- model_log %>%
-  add_row(model = "m_", added = "log of ___",
+  add_row(model = "m_", added = "log of % of people in poverty",
           cv_rmse = cv_rmse(f_log, tracts),
           notes = "___")
 
-# squared term
+# squared term: % with bachelors or more
+f_sq <- lm(y ~ pct_bach + I(pct_bach^2), data = tracts)
+f_sq <- y ~ pct_pov + pct_65 + pct_bach + I(pct_bach^2) + pct_ez + pct_rda + dist_rda_mi
 
-# categorical
+model_log <- model_log %>%
+  add_row(model = "m6", added = "squared % bachelor's",
+          cv_rmse = cv_rmse(f_sq, tracts),
+          notes = "___")
+
+summary(f_sq)
+ggplot(tracts, aes(x = pct_bach, y = y)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2), se = FALSE, color = "red") +
+  theme_minimal()
+
+# categorical term: % in redevelopment area
+
+tracts <- tracts %>%
+    mutate(
+    ring = if_else(pct_rda >= 50, "In RDA", "Not in RDA"),
+    ring = factor(ring, levels = c("Not in RDA", "In RDA"))
+  )
+
+tracts %>% st_drop_geometry() %>% count(ring)
+
+f_cat <- y ~ pct_pov + pct_65 + pct_bach + pct_ez + ring + dist_rda_mi
+
+model_log <- model_log %>%
+  add_row(model = "m7", added = "In/not in Redevelopment Area",
+          cv_rmse = cv_rmse(f_cat, tracts),
+          notes = "___")
 
 model_log
 ```
-
-**Answer:** Which transformation helped most? For your categorical variable, write one sentence reading one of its coefficients correctly, naming the reference level.
-
-*Your answer:*
+The log transformation of percent of people in poverty did not help, it only improved the CV RMSE slightly by 0.017. Similarly, the squared result of the households with a bachelors degree or higher did not make a significant difference in CV RMSE, only a 0.016 increase. The categorical model also did not help, it only resulted in the lowest CV RMSE of 5.16, a 0.006 difference from the original model. Tracts with at least half their area in a Redevelopment Area (categorical variable) have a predicted vacancy rate about 5.6 percentage points higher than tracts not in RDA. 
 
 ---
 
