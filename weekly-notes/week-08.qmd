@@ -1,0 +1,31 @@
+---
+title: "Week 8: Spatial Correlation"
+format: html
+description: Moran's I, spatial lag/autocorrelation
+date: 2026-10-16
+---
+
+# week 8
+
+- quiz: 100% of the data is not tested on 10 fold cross validation. 10 fold cross validation is preferred over 80/20 because all of the observations are seen, so there are no unlucky splits.
+- beta coefficient: a 1% increase goes with the coefficient more in y
+- error: broken fold
+    - small fold had all of its data in one, so it couldn’t be predicted since that data wasn’t seen.
+    - solution: merge small groups before cross-validation
+    - usually happens in neighborhoods
+- points for prediction
+    - average distance to the nearest occurrence
+    - avg distance to the _ nearest occurrences
+    - KNN: K nearest neighbors
+    - buffer around each house and the number of occurrences within that buffer
+- clean the data, the smaller, the better fit
+    - ex. $1 homes, really expensive ones → may lead to overfitting
+    - fresh data with outliers won’t work on this model
+    - can make indicator variables (houses with more than 5+ bedrooms = mansion)
+- spatial lag: neighbors average
+    - every house gets average residual of 5 nearest neighbors
+- positive slope on Moran’s I, relationship with each house and the neighbors
+    - equation: if i’m above average, will my neighbors above average too?
+- spatial autocorrelation
+    - -1 more spread out than it is in real life
+- [moran.mc](http://moran.mc) shuffles the residuals across houses n times and if the real i beats almost all the shuffle → clustering is not luck.
