@@ -224,6 +224,25 @@ Start with a structure-only baseline. Then add features in steps you can learn f
 
 ```{r}
 #| label: part-2
+
+model_log <- tibble(
+  model = character(),
+  added = character(),
+  cv_rmse = numeric(),
+  moran_i = numeric(),
+  notes = character()
+)
+
+log_model <- function(name, added, formula, notes=""){
+  set.seed(5080)
+  cv <- train(formula, data=train, method="lm")
+  fit <- lm(formula, data = all_sales)
+  mi <- moran.test(residuals(fit), s)
+}
+
+m1 <- lm(sale_price ~ building_000sf + building_age + lotsize_acre, data = all_sales)
+summary(m1)
+
 ```
 
 ---
@@ -250,6 +269,8 @@ Show your final model, the model log, and baseline vs. final residual maps.
 
 ```{r}
 #| label: part-4
+
+
 ```
 
 *Your answers:*
