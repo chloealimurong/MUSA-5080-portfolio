@@ -315,9 +315,17 @@ The model fails the worst surrounding the loop area. The price being higher than
 
 ```{r}
 #| label: part-4
+#tracts <- get_acs(
+  #geography = "tract", 
+  #state = "IL",
+  #county = "Cook",
+  #variables = c(income = "B19013_001"),
+  #year = 2023, geometry = TRUE, output = "wide") %>%
+  #st_transform(st_crs(EPSG:2272))
 
+#4A
 
-
+#ggplot(tracts, )
 ```
 
 *Your answers:*
@@ -334,16 +342,25 @@ Refit your final recipe on all training sales, then predict every test house. Se
 f_final <- sale_price ~ building_000sf + building_age + lotsize_acre + log1p(num_bedrooms) + num_fireplaces
 m_final <- lm(f_final, data = st_drop_geometry(train))
 
-test <- all_sales %>% filter(split == "test")
+all_sales <- all_sales %>% mutate(num_fireplaces = replace_na(num_fireplaces, 0))
+test <- all_sales %>% filter(split == "test") %>%
+  mutate(sale_price = replace_na(sale_price, 0))
+
 check_na(f_final, st_drop_geometry(test))       # fill NAs; never drop test rows
+
+
 
 preds <- tibble(id = test$id, pred = predict(m_final, st_drop_geometry(test)))
 
 stopifnot(nrow(preds) == nrow(test), all(is.finite(preds$pred)))
 write_csv(preds, "team_YNN_predictions.csv")     # replace XX with your team number
+
+cvrmse_final <- sqrt(mean(residuals(m_final)^2))
+cvrmse_final
+
 ```
 
-**Final CV RMSE:** ___ . When your test RMSE comes back, you'll explain the gap on Q7.
+**Final CV RMSE:** 164504.7. 
 
 ---
 
