@@ -156,7 +156,7 @@ Decide which training sales are market sales. Record each rule, why, and how man
 ```{r}
 #| label: part-1
 
-train_new <- train
+#train_new <- train
 
 # sale price < $1
 train_sp <- train %>%
@@ -173,6 +173,16 @@ train_ls <- train %>%
 # sale price > $ 1 million dollars
 train_spm <- train %>%
   filter(sale_price>1000000)
+
+# cleaning the data for the model
+train <- train %>%
+  filter(
+    sale_price>1,
+    num_fireplaces<4,
+    building_000sf<3,
+    sale_price<1000000,
+    building_age > 0
+  )
 
 # Plot 1: sale price <= $1
 ggplot(train, aes(x = building_000sf, y = sale_price)) +
@@ -215,7 +225,7 @@ ggplot(train, aes(x = building_000sf, y = sale_price)) +
 **Answer:** What in your exploration shaped your modeling choices?
 
 *Your answer:*
-The cleaning process got rid of 1868 observations. 
+The cleaning process got rid of 1868 observations. For the baseline model, we chose features that didn't need major cleaning; square footage, age and lot size (only one feature was removed.) The added model included features that we cleaned more. Our class discussion made us wary of higher fireplaces. 
 ---
 
 ## Part 2: Build the model
@@ -224,25 +234,37 @@ Start with a structure-only baseline. Then add features in steps you can learn f
 
 ```{r}
 #| label: part-2
+#| warning: false
 
-model_log <- tibble(
-  model = character(),
-  added = character(),
-  cv_rmse = numeric(),
-  moran_i = numeric(),
-  notes = character()
+#baseline
+m1 <- lm(sale_price ~ building_000sf + building_age + lotsize_acre, data = train)
+#summary(m1)
+
+#added
+m2 <- lm(sale_price ~ building_000sf + building_age + lotsize_acre +num_bedrooms +num_fireplaces, data = train)
+
+#log version
+m_log <- lm(sale_price ~ building_000sf + building_age + lotsize_acre + log(num_bedrooms) + num_fireplaces, data = train)
+
+rmse1 <- sqrt(mean(residuals(m1)^2))
+rmse2 <- sqrt(mean(residuals(m2)^2))
+rmse3 <- sqrt(mean(residuals(m_log)^2))
+
+coords <- as.matrix(train[, c("lon", "lat")])
+nb <- knn2nb(knearneigh(coords, k = 5))
+lw <- nb2listw(nb, style = "W")
+
+mi1 <- moran.mc(residuals(m1), lw, nsim = 999)   
+mi2 <- moran.mc(residuals(m2), lw, nsim = 999) 
+mi3 <- moran.mc(residuals(m_log), lw, nsim = 999)
+  
+tibb <- tibble(
+  model   = c("m1", "m2", "m_log"),
+  added   = c("Structure-only baseline", "Bedrooms + fireplaces", "Logged features"),
+  cv_rmse = c(rmse1, rmse2, rmse3),
+  moran_i = c(mi1$statistic, mi2$statistic, mi3$statistic),
+  notes   = c(" ", " ", " ")
 )
-
-log_model <- function(name, added, formula, notes=""){
-  set.seed(5080)
-  cv <- train(formula, data=train, method="lm")
-  fit <- lm(formula, data = all_sales)
-  mi <- moran.test(residuals(fit), s)
-}
-
-m1 <- lm(sale_price ~ building_000sf + building_age + lotsize_acre, data = all_sales)
-summary(m1)
-
 ```
 
 ---
@@ -253,22 +275,47 @@ Show your final model, the model log, and baseline vs. final residual maps.
 
 ```{r}
 #| label: part-3
+
+final <- lm(sale_price ~ building_000sf + building_age + lotsize_acre + log1p(num_bedrooms) + num_fireplaces, data = train)
+summary(train$lon)
+summary(train$lat)
+#model log
+print(tibb)
+
+# baseline vs. final residual maps
+train <- train %>%
+  mutate(resid_base  = residuals(m1),
+         resid_final = residuals(final))
+
+train <- st_as_sf(train, coords = c("lon", "lat"), crs = 2272, remove = FALSE)
+
+ggplot(train) +
+  geom_sf(aes(color = resid_final), size = 0.6) +
+  scale_color_gradient2(low = "#2166ac", mid = "grey95", high = "#b2182b",
+                        midpoint = 0, labels = scales::dollar) +
+  theme_void() +
+  labs(title = "Where the sale price model is wrong",
+       subtitle = "Red = sale price is higher than predicted · Blue = lower than predicted",
+       color = "Residual")
 ```
 
 **Answer:** What helped most, and what disappointed you? Use your log.
 
 *Your answer:*
+The feature engineering that assisted the model most was adding more features, especially logging the number of bedrooms. Logging more than the selected features actually increased the RMSE in my model so I removed that. The biggest disappointment was our moran's i results. The baseline outperformed the other models in terms of spatial correlation but not by much, 0.01. 
 
 ---
 
 ## Part 4: Where it fails, and who pays
 
 **4A.** Where does your final model fail worst? Is it guessing too high or too low there, and why do you think so?
+The model fails the worst surrounding the loop area. The price being higher than predicted the most. We believe this concentration is due to the popularity of the area and proximity to center of the city and all the amenities it offers.
 
 **4B.** Assessors judge their work with the **ratio** of predicted value to sale price. A ratio above 1 means the home is over-valued and its owner over-taxed. Does your model's ratio differ by neighborhood income? Connect your answer to your Part 1 cleaning rules and to "The Tax Divide."
 
 ```{r}
 #| label: part-4
+
 
 
 ```
@@ -283,6 +330,8 @@ Refit your final recipe on all training sales, then predict every test house. Se
 
 ```{r}
 #| label: predict-test
+
+f_final <- sale_price ~ building_000sf + building_age + lotsize_acre + log1p(num_bedrooms) + num_fireplaces
 m_final <- lm(f_final, data = st_drop_geometry(train))
 
 test <- all_sales %>% filter(split == "test")
@@ -291,7 +340,7 @@ check_na(f_final, st_drop_geometry(test))       # fill NAs; never drop test rows
 preds <- tibble(id = test$id, pred = predict(m_final, st_drop_geometry(test)))
 
 stopifnot(nrow(preds) == nrow(test), all(is.finite(preds$pred)))
-write_csv(preds, "team_XX_predictions.csv")     # replace XX with your team number
+write_csv(preds, "team_YNN_predictions.csv")     # replace XX with your team number
 ```
 
 **Final CV RMSE:** ___ . When your test RMSE comes back, you'll explain the gap on Q7.
@@ -307,9 +356,11 @@ write_csv(preds, "team_XX_predictions.csv")     # replace XX with your team numb
 
 ### Who did what
 
-| Name | Main contribution |
-|---|---|
-| | |
+| Abishek |  |
+| Chloe | Coding, Scribe |
+| Ellis | |
+| Evelyn |  |
 
 ### AI Team Statement
 What was your team's AI policy and how was AI used in this assignment? 
+AI was used to debug our code and understand what the assignment instructions were asking from us. Code creation was done by hand.
