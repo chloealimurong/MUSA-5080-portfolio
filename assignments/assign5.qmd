@@ -287,7 +287,7 @@ train <- train %>%
   mutate(resid_base  = residuals(m1),
          resid_final = residuals(final))
 
-train <- st_as_sf(train, coords = c("lon", "lat"), crs = 2272, remove = FALSE)
+train <- st_as_sf(train, coords = c("lon", "lat"), crs = 3435, remove = FALSE)
 
 ggplot(train) +
   geom_sf(aes(color = resid_final), size = 0.6) +
@@ -315,17 +315,79 @@ The model fails the worst surrounding the loop area. The price being higher than
 
 ```{r}
 #| label: part-4
-#tracts <- get_acs(
-  #geography = "tract", 
-  #state = "IL",
-  #county = "Cook",
-  #variables = c(income = "B19013_001"),
-  #year = 2023, geometry = TRUE, output = "wide") %>%
-  #st_transform(st_crs(EPSG:2272))
 
-#4A
+st_bbox(all_sales)                          # expect x about 1.1M-1.2M, y about 1.8M-1.95M
+all_sales <- st_set_crs(all_sales, 3435)    # only if st_crs(all_sales) is NA or wrong
 
-#ggplot(tracts, )
+train <- all_sales %>% filter(split == "train")
+
+m_final <- lm(final, data = st_drop_geometry(train))
+
+sales <- train %>%
+  mutate(pred  = predict(m_final, st_drop_geometry(train)),
+         ratio = pred / sale_price)
+
+summary(sales$ratio)
+
+tracts<-get_acs(
+  geography = "tract", state = "IL", county = "Cook",
+  variables = c(below_pov = "B17001_002",
+             total_pop = "B01003_001"),
+    year = 2024, geometry = TRUE, output = "wide")
+
+tracts<-tracts%>%
+  mutate(pct_pov= 100 * below_povE/total_popE)
+
+sales_proj <- sales%>%
+  st_transform(3435)
+
+tracts_proj=tracts%>%
+  st_transform(3435)
+
+sales_tract=st_join(sales_proj,tracts_proj,join = st_intersects)
+
+tract_ratio <- sales_tract %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarize(median_ratio = median(ratio, na.rm = TRUE),
+            n_sales = n())
+
+tract_map <- tracts %>%
+  left_join(tract_ratio, by = "GEOID") %>%
+  filter(n_sales >= 1)
+
+
+f1=lm(log(median_ratio) ~ pct_pov, data = tract_map)
+summary(f1)
+
+### Mapping it
+
+library(biscale)
+library(cowplot)
+
+map_df <- tract_map %>%
+  filter(!is.na(GEOID), !is.na(pct_pov), !is.na(median_ratio)) %>%
+  st_transform(3435)
+
+map_df <- bi_class(map_df,
+                   x = pct_pov,
+                   y = median_ratio,
+                   style = "quantile",
+                   dim = 3)
+map <- ggplot() +
+  geom_sf(data = map_df, aes(fill = bi_class),
+          color = "white", linewidth = 0.1, show.legend = FALSE) +
+  bi_scale_fill(pal = "DkViolet", dim = 3) +
+  labs(title = "Poverty Rate and Assessment Sales Ratio in Cook County") +
+  bi_theme()+ theme(plot.title = element_text(size = 12))
+
+legend <- bi_legend(pal = "DkViolet", dim = 3,
+                    xlab = "Higher poverty ",
+                    ylab = "Higher ratio ",
+                    size = 7)
+ggdraw() +
+  draw_plot(map, 0, 0, 1, 1) +
+  draw_plot(legend, 0.05, 0.5, 0.25, 0.25)
 ```
 
 *Your answers:*
@@ -361,7 +423,7 @@ cvrmse_final
 ```
 
 **Final CV RMSE:** 164504.7. 
-
+164490
 ---
 
 ## Part 6: Reflection (about 300 words, as a team)
