@@ -423,7 +423,6 @@ cvrmse_final
 ```
 
 **Final CV RMSE:** 164504.7. 
-164490
 ---
 
 ## Part 6: Reflection (about 300 words, as a team)
