@@ -1,0 +1,40 @@
+---
+title: "Counts, Fishnets, and Dirty Data"
+format: html
+description: Predictive Policing & Poisson Regression
+date: 2026-10-30
+
+---
+
+# week 10
+
+- poisson regression
+    - when you are bound by zero and can’t have any negative numbers
+    - or have a lot of zeros
+- predictive policing
+    - ‘sensible data driven solutions’
+    - racial bias reinforcement
+- confirmation feedback loop
+- data is the result of human decisions→ not objective
+
+### predictive policing model
+
+- 2024 → future
+- risk or predicted number of burglaries (spatially)
+- grid-cell resolution level or police districts
+- define number of crimes in each grid cell
+- 500 ft
+- grid function : fishnet ←
+    - st_make_grid
+    - cell_size in units of CRS (ft)
+- OLS breaks
+    - log the mean and not the data → poisson regression
+- exp(B) the multiplicative change in expected count per one unit change in x
+- one unit increase in x means 22% more expected burglaries
+- poisson model assumes the **variance** is **equal** to the **mean**
+- if the variance is not equal to the mean, model might be more of a negative binomial
+- over dispersion: more zeros, may use negative binomial model
+- Broken Windows Theory
+- all feature types is 2024, the outcome is 2025
+- K Nearest Neighbors compared to nearby cells
+- each additional _ means _% more/fewer expected burglaries
