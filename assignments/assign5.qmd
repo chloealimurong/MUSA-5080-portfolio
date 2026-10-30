@@ -108,8 +108,8 @@ Build every feature on `all_sales`, so training and test houses get identical fe
 #| label: load
 
 all_sales <- bind_rows(
-  read_csv("~/Documents/MUSA-5080-portfolio/data/chicago_train.csv", show_col_types = FALSE) %>% mutate(split = "train"),
-  read_csv("~/Documents/MUSA-5080-portfolio/data/chicago_test.csv",  show_col_types = FALSE) %>% mutate(split = "test")
+  read_csv("~/GitHub/MUSA-5080-portfolio/data/chicago_train.csv", show_col_types = FALSE) %>% mutate(split = "train"),
+  read_csv("~/GitHub/MUSA-5080-portfolio/data/chicago_test.csv",  show_col_types = FALSE) %>% mutate(split = "test")
 ) %>%
   mutate(row_id = row_number()) %>%   # one key per sale, so cleaning can be re-applied later
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
@@ -530,7 +530,7 @@ sum(preds$pred < 10000)
 preds <- preds %>% mutate(pred = pmax(pred, 10000))
 
 stopifnot(nrow(preds) == nrow(test), all(is.finite(preds$pred)))
-write_csv(preds, "/Documents/MUSA-5080-portfolio/data/team_YNN_predictions.csv")     # replace XX with your team number
+write_csv(preds, "~/GitHub/MUSA-5080-portfolio/data/team_YNN_predictions.csv")     # replace XX with your team number
 
 cvrmse_final <- cv_rmse(f_final, train)
 cvrmse_final
