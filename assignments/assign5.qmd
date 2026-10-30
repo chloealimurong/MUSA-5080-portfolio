@@ -29,38 +29,10 @@ Build a model that predicts **single-family sale prices in Chicago, 2023–2025*
 
 The test houses were held out by house, not by sale, so a house that sold twice is entirely on one side. Your CV RMSE is your estimate. Your test RMSE is the truth. **If they're far apart, something leaked.** 
 
-**Due:** Friday, October 30. All teammates renders the file on their portfolio and every member submits that link on Canvas. One teammate uploads `team_XX_predictions.csv`.
+**Due:** Friday, October 30. All teammates renders the file on their portfolio and every member submits that link on Canvas. One teammate uploads `team_YNN_predictions.csv`.
 
 **Individual accountability:** Q7 on October 30 asks each of you about *this* model: which features you used and why, your CV and test RMSE, and where the model fails worst. Make sure everyone can explain all of it.
 
-### Rules
-
-::: {.callout-important}
-## 1. Clean training rows once, in Part 1. Never drop test rows.
-You must predict every test house, so fill NAs in a feature rather than filtering.
-
-## 2. Stay inside the time window
-Open data from 2023–2025 only.
-
-## 3. No leakage
-Nothing built from sale prices. *Would the Assessor have this number for a house that didn't sell?*
-
-## 4. The outcome stays in dollars
-Transform predictors, not `sale_price`.
-
-## 5. No prices from the test fold or the future
-No features built from other houses' sale prices. 
-:::
-
-### Please include in your final rendered qmd for this assignment:
-
-| | |
-|---|---|
-| **Model log** | Every model you tried, in order, with CV RMSE and Moran's I. Each row has a note saying why you tried it. |
-| **Features** | Incorporate the feature engineering tricks - including the spatial ones covered these past few weeks. 
-| **Diagnostics** | Residual maps for your baseline and final model, and what changed. |
-| **Error analysis** | Where your final model fails worst, and whose homes it over-values (Part 4). |
-| **Reasoning** | Choices justified by evidence from your own analysis.
 
 ---
 
@@ -78,6 +50,8 @@ library(sf)
 library(caret)
 library(spdep)
 library(nngeo)
+library(biscale)
+library(cowplot)
 options(scipen = 999)
 ```
 
@@ -133,12 +107,11 @@ Build every feature on `all_sales`, so training and test houses get identical fe
 ```{r}
 #| label: load
 
-train <- read.csv("~/GitHub/MUSA-5080-portfolio/data/chicago_train.csv")
-test <- read.csv("~/GitHub/MUSA-5080-portfolio/data/chicago_test.csv")
 all_sales <- bind_rows(
-  read_csv("~/GitHub/MUSA-5080-portfolio/data/chicago_train.csv", show_col_types = FALSE) %>% mutate(split = "train"),
-  read_csv("~/GitHub/MUSA-5080-portfolio/data/chicago_test.csv",  show_col_types = FALSE) %>% mutate(split = "test")
+  read_csv("~/Documents/MUSA-5080-portfolio/data/chicago_train.csv", show_col_types = FALSE) %>% mutate(split = "train"),
+  read_csv("~/Documents/MUSA-5080-portfolio/data/chicago_test.csv",  show_col_types = FALSE) %>% mutate(split = "test")
 ) %>%
+  mutate(row_id = row_number()) %>%   # one key per sale, so cleaning can be re-applied later
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
   st_transform(3435)            # Illinois East State Plane, feet
 
@@ -156,76 +129,95 @@ Decide which training sales are market sales. Record each rule, why, and how man
 ```{r}
 #| label: part-1
 
-#train_new <- train
+train_raw <- all_sales %>% filter(split == "train")
+n0 <- nrow(train_raw)
 
-# sale price < $1
-train_sp <- train %>%
-  filter(sale_price<=1)
+# Rule 1: sales of $1 or less are transfers, not market sales
+step1 <- train_raw %>% filter(sale_price > 1)
 
-# num_fireplace > 4 -> mansion
-train_fp <- train %>%
-  filter(num_fireplaces > 4)
+# Rule 2: sales of $5 million or more (the top 0.1%)
+step2 <- step1 %>% filter(sale_price < 5000000)
 
-# lot size > 3 acres
-train_ls <- train %>%
-  filter(building_000sf > 3)
+# Rule 3: more than 4 fireplaces (NAs kept, they are filled with 0 in Part 2)
+step3 <- step2 %>% filter(is.na(num_fireplaces) | num_fireplaces <= 4)
 
-# sale price > $ 1 million dollars
-train_spm <- train %>%
-  filter(sale_price>1000000)
+# Rule 4: lots larger than 3 acres
+step4 <- step3 %>% filter(is.na(lotsize_acre) | lotsize_acre <= 3)
 
-# cleaning the data for the model
-train <- train %>%
-  filter(
-    sale_price>1,
-    num_fireplaces<4,
-    building_000sf<3,
-    sale_price<1000000,
-    building_age > 0
-  )
+# Rule 5: negative building age is a data error (age 0 = new construction, kept)
+step5 <- step4 %>% filter(is.na(building_age) | building_age >= 0)
 
-# Plot 1: sale price <= $1
-ggplot(train, aes(x = building_000sf, y = sale_price)) +
-  geom_point(alpha = 0.3, color = "grey60") +
-  geom_point(data = train_sp, color = "red", size = 2) +
-  scale_y_log10(labels = scales::dollar) +
-  labs(x = "Living area (sq ft)", y = "Sale price (log)",
-       title = "Sales of $1 or less") +
+cleaning_log <- tibble(
+  rule    = c("Sale price <= $1",
+              "Sale price >= $5,000,000",
+              "More than 4 fireplaces",
+              "Lot larger than 3 acres",
+              "Negative building age"),
+  why     = c("Transfers between family members or entities, not market sales",
+              "Top 0.1% of sales; a few mansions would pull the whole model",
+              "Estate-type homes; too few to learn from",
+              "Not a typical city lot; likely mis-coded or not a single-family sale",
+              "Impossible value, data entry error"),
+  removed = c(n0 - nrow(step1),
+              nrow(step1) - nrow(step2),
+              nrow(step2) - nrow(step3),
+              nrow(step3) - nrow(step4),
+              nrow(step4) - nrow(step5))
+)
+print(cleaning_log)
+
+keep_ids <- step5$row_id      # used again in Part 2 after features are built
+train <- step5
+
+# Plot 1: distribution of price (log scale)
+ggplot(step1, aes(x = sale_price)) +
+  geom_histogram(bins = 60, fill = "grey60") +
+  geom_vline(xintercept = c(1000000, 5000000), color = "red", linetype = "dashed") +
+  scale_x_log10(labels = scales::dollar) +
+  labs(x = "Sale price (log scale)", y = "Number of sales",
+       title = "Sale prices are right-skewed; red lines = $1M and $5M") +
   theme_minimal()
 
-# Plot 2: fireplaces > 4
-ggplot(train, aes(x = num_fireplaces, y = sale_price)) +
+# Share of training sales at $1M or more
+mean(step1$sale_price >= 1000000)
+
+# Plot 2: price vs living area, sales of $5M+ in red
+ggplot(step1, aes(x = building_000sf, y = sale_price)) +
   geom_point(alpha = 0.3, color = "grey60") +
-  geom_point(data = train_fp, color = "red", size = 2) +
+  geom_point(data = filter(step1, sale_price >= 5000000), color = "red", size = 1) +
   scale_y_continuous(labels = scales::dollar) +
-  labs(x = "Number of fireplaces", y = "Sale price",
-       title = "Homes with more than 4 fireplaces") +
+  labs(x = "Living area (000s sq ft)", y = "Sale price",
+       title = "Sales over $5 million") +
   theme_minimal()
 
-# Plot 3: lot size > 3 acres
-ggplot(train, aes(x = building_000sf, y = sale_price)) +
-  geom_point(alpha = 0.3, color = "grey60") +
-  geom_point(data = train_ls, color = "red", size = 2) +
+# Plot 3: price vs building age (cleaned data)
+ggplot(train, aes(x = building_age, y = sale_price)) +
+  geom_point(alpha = 0.2, color = "grey60") +
+  geom_smooth(color = "red") +
   scale_y_continuous(labels = scales::dollar) +
-  labs(x = "Living area (sq ft)", y = "Sale price",
-       title = "Lots larger than 3 acres") +
+  labs(x = "Building age (years)", y = "Sale price",
+       title = "Price and age are not a straight line") +
   theme_minimal()
 
-# Plot 4: sale price > $1M
-ggplot(train, aes(x = building_000sf, y = sale_price)) +
-  geom_point(alpha = 0.3, color = "grey60") +
-  geom_point(data = train_spm, color = "red", size = 2) +
-  scale_y_continuous(labels = scales::dollar) +
-  labs(x = "Living area (sq ft)", y = "Sale price",
-       title = "Sales over $1 million") +
-  theme_minimal()
-
+# Plot 4: map of price (cleaned data)
+ggplot(train) +
+  geom_sf(aes(color = sale_price), size = 0.4) +
+  scale_color_viridis_c(labels = scales::dollar) +
+  theme_void() +
+  labs(title = "Sale price, Chicago single-family homes 2023-2025",
+       color = "Sale price")
 ```
 
 **Answer:** What in your exploration shaped your modeling choices?
 
 *Your answer:*
-The cleaning process got rid of 1868 observations. For the baseline model, we chose features that didn't need major cleaning; square footage, age and lot size (only one feature was removed.) The added model included features that we cleaned more. Our class discussion made us wary of higher fireplaces. 
+
+Our five cleaning rules removed 39 of 23,200 training sales (see the table above): 30 sales of $5 million or more, 8 homes with more than 4 fireplaces and 1 lot over 3 acres. We checked for $1 transfers and negative ages and found none (the cheapest sale is about $10,000). We kept rows with missing values and filled them instead, and we kept new construction (age 0).
+
+Our first draft also dropped every sale over $1 million. The histogram changed our minds: those 1,892 sales are 8.2% of the training data, not a few outliers, and the test houses are not cleaned, so the model has to price them. Dropping them made CV RMSE look good only because the hardest homes were gone. We now drop only the top 0.1% (over $5 million).
+
+Two other things from the plots shaped the model. The price map shows a clear north/south split, with higher prices on the North Side and near the lake. A model built only on house features cannot see that, so we knew we would need location features. And the age plot is U-shaped: new homes sell highest, prices bottom out for homes 50–100 years old, and rise again for the oldest (historic) homes. So we added age squared.
+
 ---
 
 ## Part 2: Build the model
@@ -233,37 +225,118 @@ The cleaning process got rid of 1868 observations. For the baseline model, we ch
 Start with a structure-only baseline. Then add features in steps you can learn from, logging each one. Keep the log in a tibble with columns `model`, `added`, `cv_rmse`, `moran_i`, `notes`.
 
 ```{r}
+#| label: features
+#| results: hide
+
+# Fill NAs in house features on all_sales (Rule 1: fill, never drop test rows)
+all_sales <- all_sales %>%
+  mutate(num_fireplaces = replace_na(num_fireplaces, 0),
+         building_000sf = replace_na(building_000sf, median(building_000sf, na.rm = TRUE)),
+         building_age   = replace_na(building_age,   median(building_age,   na.rm = TRUE)),
+         lotsize_acre   = replace_na(lotsize_acre,   median(lotsize_acre,   na.rm = TRUE)),
+         num_bedrooms   = replace_na(num_bedrooms,   median(num_bedrooms,   na.rm = TRUE)))
+
+# Feature 1: distance to the Loop (State & Madison), in miles
+loop <- st_sfc(st_point(c(-87.6278, 41.8820)), crs = 4326) %>% st_transform(3435)
+all_sales <- all_sales %>%
+  mutate(dist_loop_mi = as.numeric(st_distance(geometry, loop)) / 5280)
+
+# Feature 2: census tract income and poverty (ACS 2023 5-year)
+acs <- get_acs(
+  geography = "tract", state = "IL", county = "Cook", year = 2023,
+  variables = c(med_inc = "B19013_001",
+                pov     = "B17001_002",
+                pov_den = "B17001_001"),     # population for whom poverty is determined
+  geometry = TRUE, output = "wide") %>%
+  mutate(med_inc = med_incE,
+         pct_pov = 100 * povE / pov_denE) %>%
+  select(GEOID, med_inc, pct_pov) %>%
+  st_transform(3435)
+
+all_sales <- all_sales %>%
+  st_join(acs, join = st_nearest_feature) %>%
+  mutate(med_inc = replace_na(med_inc, median(med_inc, na.rm = TRUE)),
+         pct_pov = replace_na(pct_pov, median(pct_pov, na.rm = TRUE)))
+
+# Feature 3: community area (fixed effect). Dataset igwz-8jzy on the Data Portal.
+# If the join below errors, run names(ca) to check the name column.
+ca <- st_read("https://data.cityofchicago.org/resource/igwz-8jzy.geojson", quiet = TRUE) %>%
+  select(community) %>%
+  st_transform(3435)
+
+all_sales <- all_sales %>%
+  st_join(ca, join = st_nearest_feature)
+
+# Split training sales off again, with the Part 1 cleaning applied
+train <- all_sales %>% filter(row_id %in% keep_ids)
+```
+
+```{r}
 #| label: part-2
 #| warning: false
 
-#baseline
-m1 <- lm(sale_price ~ building_000sf + building_age + lotsize_acre, data = train)
-#summary(m1)
+f1 <- sale_price ~ building_000sf + building_age + lotsize_acre
+f2 <- sale_price ~ building_000sf + building_age + lotsize_acre + num_bedrooms + num_fireplaces
+f3 <- sale_price ~ building_000sf + building_age + lotsize_acre + log1p(num_bedrooms) + num_fireplaces
+f4 <- sale_price ~ building_000sf + building_age + I(building_age^2) + lotsize_acre +
+  log1p(num_bedrooms) + num_fireplaces
+f5 <- sale_price ~ building_000sf + building_age + I(building_age^2) + lotsize_acre +
+  log1p(num_bedrooms) + num_fireplaces + dist_loop_mi
+f6 <- sale_price ~ building_000sf + building_age + I(building_age^2) + lotsize_acre +
+  log1p(num_bedrooms) + num_fireplaces + dist_loop_mi + log(med_inc) + pct_pov
+f7 <- sale_price ~ building_000sf + building_age + I(building_age^2) + lotsize_acre +
+  log1p(num_bedrooms) + num_fireplaces + dist_loop_mi + log(med_inc) + pct_pov + community
 
-#added
-m2 <- lm(sale_price ~ building_000sf + building_age + lotsize_acre +num_bedrooms +num_fireplaces, data = train)
+# CV RMSE
+rmse1 <- cv_rmse(f1, train)
+rmse2 <- cv_rmse(f2, train)
+rmse3 <- cv_rmse(f3, train)
+rmse4 <- cv_rmse(f4, train)
+rmse5 <- cv_rmse(f5, train)
+rmse6 <- cv_rmse(f6, train)
+rmse7 <- cv_rmse(f7, train)
 
-#log version
-m_log <- lm(sale_price ~ building_000sf + building_age + lotsize_acre + log(num_bedrooms) + num_fireplaces, data = train)
-
-rmse1 <- sqrt(mean(residuals(m1)^2))
-rmse2 <- sqrt(mean(residuals(m2)^2))
-rmse3 <- sqrt(mean(residuals(m_log)^2))
-
-coords <- as.matrix(train[, c("lon", "lat")])
+# Spatial weights: 5 nearest neighbors, projected coordinates (feet)
+coords <- st_coordinates(train)
 nb <- knn2nb(knearneigh(coords, k = 5))
 lw <- nb2listw(nb, style = "W")
 
-mi1 <- moran.mc(residuals(m1), lw, nsim = 999)   
-mi2 <- moran.mc(residuals(m2), lw, nsim = 999) 
-mi3 <- moran.mc(residuals(m_log), lw, nsim = 999)
-  
+# Moran's I on out-of-fold residuals (same predictions the CV RMSE is based on)
+r1 <- train$sale_price - cv_pred(f1, train)
+r2 <- train$sale_price - cv_pred(f2, train)
+r3 <- train$sale_price - cv_pred(f3, train)
+r4 <- train$sale_price - cv_pred(f4, train)
+r5 <- train$sale_price - cv_pred(f5, train)
+r6 <- train$sale_price - cv_pred(f6, train)
+r7 <- train$sale_price - cv_pred(f7, train)
+
+mi1 <- moran.mc(r1, lw, nsim = 999)
+mi2 <- moran.mc(r2, lw, nsim = 999)
+mi3 <- moran.mc(r3, lw, nsim = 999)
+mi4 <- moran.mc(r4, lw, nsim = 999)
+mi5 <- moran.mc(r5, lw, nsim = 999)
+mi6 <- moran.mc(r6, lw, nsim = 999)
+mi7 <- moran.mc(r7, lw, nsim = 999)
+
 tibb <- tibble(
-  model   = c("m1", "m2", "m_log"),
-  added   = c("Structure-only baseline", "Bedrooms + fireplaces", "Logged features"),
-  cv_rmse = c(rmse1, rmse2, rmse3),
-  moran_i = c(mi1$statistic, mi2$statistic, mi3$statistic),
-  notes   = c(" ", " ", " ")
+  model   = c("m1", "m2", "m3", "m4", "m5", "m6", "m7"),
+  added   = c("Structure-only baseline",
+              "+ bedrooms, fireplaces",
+              "log1p(bedrooms)",
+              "+ age squared",
+              "+ distance to the Loop",
+              "+ tract income, % poverty",
+              "+ community area"),
+  cv_rmse = c(rmse1, rmse2, rmse3, rmse4, rmse5, rmse6, rmse7),
+  moran_i = c(mi1$statistic, mi2$statistic, mi3$statistic, mi4$statistic,
+              mi5$statistic, mi6$statistic, mi7$statistic),
+  notes   = c("Size, age and lot: features that needed little cleaning",
+              "Details of the house beyond its size",
+              "Each extra bedroom should add less than the one before",
+              "Age plot in Part 1 curves: new and historic homes both sell higher",
+              "Residual maps of m1-m4 were clustered: the model needed location",
+              "Price map follows neighborhood income, not just distance downtown",
+              "Fixed effect for each neighborhood's unmeasured amenities")
 )
 ```
 
@@ -276,25 +349,38 @@ Show your final model, the model log, and baseline vs. final residual maps.
 ```{r}
 #| label: part-3
 
-final <- lm(sale_price ~ building_000sf + building_age + lotsize_acre + log1p(num_bedrooms) + num_fireplaces, data = train)
-summary(train$lon)
-summary(train$lat)
-#model log
+f_final <- f7
+final <- lm(f_final, data = st_drop_geometry(train))
+
+# Coefficients without the 75 community-area dummies (each is that area's
+# price difference from Albany Park, the reference area)
+coef_table <- summary(final)$coefficients
+print(round(coef_table[!grepl("^community", rownames(coef_table)), ], 3))
+summary(final)$adj.r.squared
+
+# model log
 print(tibb)
 
-# baseline vs. final residual maps
+# baseline vs. final residual maps (out-of-fold residuals from Part 2)
 train <- train %>%
-  mutate(resid_base  = residuals(m1),
-         resid_final = residuals(final))
+  mutate(resid_base  = r1,
+         resid_final = r7)
 
-train <- st_as_sf(train, coords = c("lon", "lat"), crs = 3435, remove = FALSE)
+ggplot(train) +
+  geom_sf(aes(color = resid_base), size = 0.6) +
+  scale_color_gradient2(low = "#2166ac", mid = "grey95", high = "#b2182b",
+                        midpoint = 0, labels = scales::dollar) +
+  theme_void() +
+  labs(title = "Where the sale price model is wrong (baseline, m1)",
+       subtitle = "Red = sale price is higher than predicted · Blue = lower than predicted",
+       color = "Residual")
 
 ggplot(train) +
   geom_sf(aes(color = resid_final), size = 0.6) +
   scale_color_gradient2(low = "#2166ac", mid = "grey95", high = "#b2182b",
                         midpoint = 0, labels = scales::dollar) +
   theme_void() +
-  labs(title = "Where the sale price model is wrong",
+  labs(title = "Where the sale price model is wrong (final, m7)",
        subtitle = "Red = sale price is higher than predicted · Blue = lower than predicted",
        color = "Residual")
 ```
@@ -302,74 +388,89 @@ ggplot(train) +
 **Answer:** What helped most, and what disappointed you? Use your log.
 
 *Your answer:*
-The feature engineering that assisted the model most was adding more features, especially logging the number of bedrooms. Logging more than the selected features actually increased the RMSE in my model so I removed that. The biggest disappointment was our moran's i results. The baseline outperformed the other models in terms of spatial correlation but not by much, 0.01. 
+
+Location helped most. The structure-only baseline (m1) had a CV RMSE of $301,503 and a Moran's I of 0.455. The house-feature steps (m2–m4: bedrooms, fireplaces, logged bedrooms, age squared) only brought CV RMSE down to $288,721, about $12,800 in total. The three location steps together cut it by almost $70,000. The community-area fixed effect (m7) was the biggest single step, cutting CV RMSE by about $36,700 and Moran's I from 0.422 to 0.263. Tract income and poverty (m6) came second, cutting CV RMSE by about $24,600; distance to the Loop (m5) added about $8,000. Our final model (m7) has a CV RMSE of $219,363 and a Moran's I of 0.263.
+
+Three things disappointed us. Logging bedrooms, which we expected to help, changed CV RMSE by less than $600. Distance to the Loop lowered CV RMSE but slightly *raised* Moran's I (0.459 to 0.476), so on its own it did not fix the clustering. And even the final model leaves Moran's I well above zero, so nearby homes are still wrong in the same direction.
+
+The residual maps show what changed. In the baseline map, a large red cluster runs along the North Side lakefront (Lincoln Park, Lake View, North Center): the model under-predicts the city's most expensive area because it does not know where homes are. In the final map, most of the city is close to zero and that north/south pattern is gone. The large errors that remain are still along the North Side lakefront, but now in both directions, with red and blue points next to each other. The model now knows the neighborhood, but not which homes within it are the top-end ones.
 
 ---
 
 ## Part 4: Where it fails, and who pays
 
 **4A.** Where does your final model fail worst? Is it guessing too high or too low there, and why do you think so?
-The model fails the worst surrounding the loop area. The price being higher than predicted the most. We believe this concentration is due to the popularity of the area and proximity to center of the city and all the amenities it offers.
 
 **4B.** Assessors judge their work with the **ratio** of predicted value to sale price. A ratio above 1 means the home is over-valued and its owner over-taxed. Does your model's ratio differ by neighborhood income? Connect your answer to your Part 1 cleaning rules and to "The Tax Divide."
 
 ```{r}
 #| label: part-4
 
-st_bbox(all_sales)                          # expect x about 1.1M-1.2M, y about 1.8M-1.95M
-all_sales <- st_set_crs(all_sales, 3435)    # only if st_crs(all_sales) is NA or wrong
-
-train <- all_sales %>% filter(split == "train")
-
-m_final <- lm(final, data = st_drop_geometry(train))
-
+# Out-of-fold predictions, so each house is valued by a model that never saw its price
 sales <- train %>%
-  mutate(pred  = predict(m_final, st_drop_geometry(train)),
+  mutate(pred  = train$sale_price - r7,
          ratio = pred / sale_price)
 
 summary(sales$ratio)
 
-tracts<-get_acs(
-  geography = "tract", state = "IL", county = "Cook",
-  variables = c(below_pov = "B17001_002",
-             total_pop = "B01003_001"),
-    year = 2024, geometry = TRUE, output = "wide")
+### 4A: where the final model fails worst
+# The community-area fixed effect makes each area's average residual close to 0,
+# so we look at (1) how big the errors are by community area, and
+# (2) which census tracts inside them are off in one direction.
+ca_error <- sales %>%
+  st_drop_geometry() %>%
+  group_by(community) %>%
+  summarize(n = n(),
+            mean_abs_error = mean(abs(resid_final)),
+            median_price   = median(sale_price)) %>%
+  filter(n >= 20) %>%
+  arrange(desc(mean_abs_error))
+print(head(ca_error, 5))
 
-tracts<-tracts%>%
-  mutate(pct_pov= 100 * below_povE/total_popE)
+tract_resid <- sales %>%
+  st_drop_geometry() %>%
+  group_by(GEOID, community) %>%
+  summarize(n = n(),
+            mean_resid   = mean(resid_final),
+            median_price = median(sale_price)) %>%
+  filter(n >= 10)
 
-sales_proj <- sales%>%
-  st_transform(3435)
+print(tract_resid %>% arrange(desc(mean_resid)) %>% head(5))   # priced higher than predicted
+print(tract_resid %>% arrange(mean_resid) %>% head(5))         # priced lower than predicted
 
-tracts_proj=tracts%>%
-  st_transform(3435)
+### 4B: ratio by neighborhood income and by sale price
+sales <- sales %>%
+  mutate(inc_q   = ntile(med_inc, 5),       # 1 = lowest-income tracts
+         price_d = ntile(sale_price, 10))   # 1 = cheapest homes
 
-sales_tract=st_join(sales_proj,tracts_proj,join = st_intersects)
+ratio_inc <- sales %>%
+  st_drop_geometry() %>%
+  group_by(inc_q) %>%
+  summarize(median_ratio = median(ratio), n = n())
+print(ratio_inc)
 
-tract_ratio <- sales_tract %>%
+ratio_price <- sales %>%
+  st_drop_geometry() %>%
+  group_by(price_d) %>%
+  summarize(median_ratio = median(ratio), n = n())
+print(ratio_price)
+
+# Tract-level: does the ratio rise with poverty?
+tract_ratio <- sales %>%
   st_drop_geometry() %>%
   group_by(GEOID) %>%
-  summarize(median_ratio = median(ratio, na.rm = TRUE),
+  summarize(median_ratio = median(ratio),
             n_sales = n())
 
-tract_map <- tracts %>%
-  left_join(tract_ratio, by = "GEOID") %>%
-  filter(n_sales >= 1)
+tract_map <- acs %>%
+  inner_join(tract_ratio, by = "GEOID") %>%
+  filter(n_sales >= 5, median_ratio > 0, !is.na(pct_pov))
 
-
-f1=lm(log(median_ratio) ~ pct_pov, data = tract_map)
-summary(f1)
+f_pov <- lm(log(median_ratio) ~ pct_pov, data = tract_map)
+summary(f_pov)
 
 ### Mapping it
-
-library(biscale)
-library(cowplot)
-
-map_df <- tract_map %>%
-  filter(!is.na(GEOID), !is.na(pct_pov), !is.na(median_ratio)) %>%
-  st_transform(3435)
-
-map_df <- bi_class(map_df,
+map_df <- bi_class(tract_map,
                    x = pct_pov,
                    y = median_ratio,
                    style = "quantile",
@@ -378,8 +479,8 @@ map <- ggplot() +
   geom_sf(data = map_df, aes(fill = bi_class),
           color = "white", linewidth = 0.1, show.legend = FALSE) +
   bi_scale_fill(pal = "DkViolet", dim = 3) +
-  labs(title = "Poverty Rate and Assessment Sales Ratio in Cook County") +
-  bi_theme()+ theme(plot.title = element_text(size = 12))
+  labs(title = "Poverty Rate and Model Sales Ratio, Chicago tracts") +
+  bi_theme() + theme(plot.title = element_text(size = 12))
 
 legend <- bi_legend(pal = "DkViolet", dim = 3,
                     xlab = "Higher poverty ",
@@ -392,6 +493,19 @@ ggdraw() +
 
 *Your answers:*
 
+**4A.** The model fails worst along the North Side lakefront. Lincoln Park, Near North Side and Lake View have the largest average errors of any community area (about $622,000 per home in Lincoln Park, where the median sale is $1.6 million). Every community area's *average* residual is close to zero, because the community-area fixed effect absorbs it. The errors show up inside these neighborhoods, and they go in both directions:
+
+- **Too low** in tracts where the most expensive homes sell, such as parts of Lake View, Lincoln Park and West Town (median sales around $1.7–3.3 million). In the worst tract, in Lincoln Park (median sale $3.3 million), homes sold for about $655,000 more than predicted on average.
+- **Too high** in other tracts of the same neighborhoods, such as parts of Lincoln Park and the Near North Side, where homes are cheaper for the area (median around $0.8–1.3 million). In the worst tract, homes sold for about $605,000 less than predicted on average. The same thing happens far from the lakefront: in one Greater Grand Crossing tract, where the median sale is $70,000, homes sold for about $347,000 less than predicted.
+
+We think this happens because the community-area fixed effect gives every home in a neighborhood the same location premium. In most of the city that works, because prices within a neighborhood are similar. On the North Side lakefront, prices range from under $1 million to over $4 million, and nothing in our model tells a $3 million home from a $900,000 one on the next block except its size, age and lot. So the model pushes both toward the neighborhood average: the top-end homes are under-valued and the more modest ones are over-valued.
+
+**4B.** Only slightly, and not in the direction we expected. In the final model, the median ratio is 0.93 for homes in the lowest-income fifth of tracts and 1.03 in the highest, rising fairly steadily in between. If anything, homes in richer tracts are slightly over-valued. At the tract level, the poverty coefficient is −0.0040 (p < 0.001): each one-point rise in a tract's poverty rate *lowers* its median ratio by about 0.4%. Poverty explains under 3% of the variation in tract ratios (R² = 0.027). In our first draft, which had no location features, the same regression gave a coefficient of +0.026, with ratios rising about 2.6% per point of poverty. Adding tract income and poverty to the model removed that neighborhood-level bias, because the model now knows which neighborhoods are poorer.
+
+The pattern by sale price is a different story. The cheapest tenth of homes have a median ratio of 1.88, while the most expensive tenth have 0.92. This is the same pattern "The Tax Divide" found in Cook County: lower-value homes are assessed at a higher share of their worth. Our location features fixed the bias *between* neighborhoods, but not the bias between cheap and expensive homes *within* them.
+
+Our cleaning rules connect to this in both directions. At the top, our first draft dropped every sale over $1 million, which hid the expensive end of the market; keeping those sales gave the model a more honest view of it. At the bottom, we kept every sale, including about 170 sales under $30,000. Some of these may be foreclosures or other distressed sales rather than true market sales, and they push the ratio for the cheapest decile up sharply. We had no rule that could tell them apart from real low-priced sales, so we left them in. An Assessor faces the same choice. If this model were used for assessments, owners of the cheapest homes would be over-assessed the most, and they would pay a larger share of the tax bill.
+
 ---
 
 ## Part 5: Predict the test houses (provided)
@@ -401,28 +515,31 @@ Refit your final recipe on all training sales, then predict every test house. Se
 ```{r}
 #| label: predict-test
 
-f_final <- sale_price ~ building_000sf + building_age + lotsize_acre + log1p(num_bedrooms) + num_fireplaces
 m_final <- lm(f_final, data = st_drop_geometry(train))
 
-all_sales <- all_sales %>% mutate(num_fireplaces = replace_na(num_fireplaces, 0))
+# Features (and NA fills) were already built on all_sales in Part 2
 test <- all_sales %>% filter(split == "test") %>%
-  mutate(sale_price = replace_na(sale_price, 0))
+  mutate(sale_price = replace_na(sale_price, 0))  # placeholder so check_na passes; never used
 
 check_na(f_final, st_drop_geometry(test))       # fill NAs; never drop test rows
 
-
-
 preds <- tibble(id = test$id, pred = predict(m_final, st_drop_geometry(test)))
 
-stopifnot(nrow(preds) == nrow(test), all(is.finite(preds$pred)))
-write_csv(preds, "team_YNN_predictions.csv")     # replace XX with your team number
+# A linear model can predict very low or negative prices; set a floor of $10,000
+sum(preds$pred < 10000)
+preds <- preds %>% mutate(pred = pmax(pred, 10000))
 
-cvrmse_final <- sqrt(mean(residuals(m_final)^2))
+stopifnot(nrow(preds) == nrow(test), all(is.finite(preds$pred)))
+write_csv(preds, "/Documents/MUSA-5080-portfolio/data/team_YNN_predictions.csv")     # replace XX with your team number
+
+cvrmse_final <- cv_rmse(f_final, train)
 cvrmse_final
 
+coef(m_final)["log1p(num_bedrooms)"]
 ```
 
-**Final CV RMSE:** 164504.7. 
+**Final CV RMSE:** $219,363
+
 ---
 
 ## Part 6: Reflection (about 300 words, as a team)
@@ -432,13 +549,24 @@ cvrmse_final
 
 *Your answer:*
 
+Our final model enters bedrooms as log1p(num_bedrooms). As β̂, the coefficient is −$43,883: the change in predicted price for a one-unit increase in log(1 + bedrooms), holding living area, age, lot size, fireplaces and location fixed. On its own that is hard to use, since nobody adds "one log unit" of bedrooms to a house.
+
+For ŷ, going from 2 to 3 bedrooms raises log1p by log(4/3) ≈ 0.29, which lowers the prediction by about $12,600. Going from 4 to 5 bedrooms raises it by only log(6/5) ≈ 0.18, which lowers the prediction by about $8,000. Each extra bedroom matters less than the one before. Because living area is held fixed, the negative sign means that splitting the same space into more, smaller rooms lowers the predicted price.
+
+We would not hand this model to the Assessor yet. Adding location cut CV RMSE from $301,503 to $219,363, but three problems remain. First, Moran's I is still 0.263, so errors are still clustered: on the North Side lakefront, whole blocks of top-end homes are under-valued while their cheaper neighbors are over-valued. Second, the model is regressive. The cheapest tenth of homes are predicted at 1.88 times their sale price and the most expensive tenth at 0.92, which is the "Tax Divide" pattern. Adding location removed the bias by neighborhood poverty, but not this one: owners of cheaper homes, in every part of the city, would get relatively higher tax bills. Third, a linear model in dollars can predict prices that make no sense: 110 test homes were predicted below $10,000 (some below zero) and had to be set to a floor.
+
+Before using it, we would add features that capture variation inside neighborhoods (transit access, crime, distance to the lake) and test the ratio by price and income again after every change.
+
 ### Who did what
 
-| Abishek |  |
-| Chloe | Coding, Scribe |
-| Ellis | |
-| Evelyn |  |
+| Member | Role |
+|---|---|
+| Abishek | Discussion of results |
+| Chloe | Primary coding and direction |
+| Ellis | Primary coding and direction |
+| Evelyn | Coding review |
 
 ### AI Team Statement
 What was your team's AI policy and how was AI used in this assignment? 
-AI was used to debug our code and understand what the assignment instructions were asking from us. Code creation was done by hand.
+
+The code was written by hand but in the final revision we used Claude to review our script, which flagged problems with our cleaning and CV RMSE. We also used Claude to understand what the assignment instructions were asking. 
