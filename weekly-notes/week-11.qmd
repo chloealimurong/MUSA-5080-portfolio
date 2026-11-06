@@ -1,0 +1,65 @@
+---
+title: "GLM, Geographic CV, Logistic Regression & Probability vs. Odds"
+format: html
+description: Logistic Regression and Prob Odds
+date: 2026-11-06
+
+---
+The **GLM Solution: Link Function**
+
+- Link (g): Map Outcome → Predictors
+    - without breaking the boundary rules
+- Inverse Link (g^-1): Map Predictors → Outcome
+    - Turn a mathematical score into real-world predictions
+
+| Model | Random Component (y) | Bounded Expected Values | Link Function | Inverse Link |
+| --- | --- | --- | --- | --- |
+| Logistic | Binomial (1/0) | Probability PE(0,1) | Logit Link: ln(p/1-p) | g^-1 Sigmoid Function |
+| Poisson | Poisson | E(0,inf) | Log Link: log(μ) | e^n/1+e^n e^n |
+
+The **Recidivism** Algorithim
+
+- Likelihood to commit a crime again
+- Phrenology: outdated personality traits based on physical attributes
+- crime^n = prison time
+    - n=number of offenses
+
+## Geographic CV + Logistic Regression I
+
+- Random k-folds doesn’t factor spatial location on train vs test data
+    - Spatial leakage
+- **District folds**, leaves one district out
+    - Geographically segmented training and testing data sets instead of a random split
+    - More comparative, x district predict better/worse than other districts
+
+## probability
+
+- odds = p/(1-p)
+    - How many more times likely is it to happen than it doesn’t?
+- p = 0.8, odds?
+    - odds = 0.8/1-0.8 = 4
+- p = 0.455 → 0.455/1-0.455 = o = 0.835
+- For every 100 people not rearrested, 84 are.
+- prob: 0 to 1
+- odss: 0 to inf
+- log odds: -inf to +inf
+- negative binomial: logit models log(odds)
+- poisson: log(expected count)
+- **log** **odds** of a **linear** model to get a **binomial** outcome
+- sigmoid. log odd
+- predict(model_fit, type= “link”) log odds default output
+- predict(model_fit, type= “response”) probability output
+
+## confusion matrix
+
+predicted + actual = true positive (**TP**)
+
+predicted + did not = false positive (**FP**)
+
+did not predict + actual = false negative (**FN**)
+
+did not predict + did not = true negative (**TN**)
+
+- **Sensitivity** = TP/(TP+FN) → of all people who had disease, how many did we catch
+- **Specificity** = TN/(TN+FP) → of all people who didn’t have it, how many did we correctly leave alone?
+- **Precision** = TP/(TP+FP) → of all predicted sick, how many actually were?
