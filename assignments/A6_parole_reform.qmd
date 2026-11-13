@@ -1,7 +1,7 @@
 ---
 title: "Assignment 6: Parole Reform"
 subtitle: "MUSA 5080 · Fall 2026"
-author: "Your Name"
+author: "Chloe Alimurong"
 date: today
 format:
   html:
@@ -56,9 +56,11 @@ A few things to know before you start:
 
 ```{r}
 #| label: setup
+#| message: false
 library(tidyverse)
 
-nij <- read_csv("data/nij_recidivism.csv") %>%
+
+nij <- read_csv("/Users/chloealimurong/GitHub/MUSA-5080-portfolio/data/nij_recidivism.csv") %>%
   mutate(
     recid              = as.integer(Recidivism_Within_3years),
     male               = as.integer(Gender == "M"),
@@ -79,15 +81,19 @@ test  <- nij %>% filter(Training_Sample == 0)
 **1.1** How many people are in `train` and in `test`? What share of each was rearrested within three years?
 
 ```{r}
-# your code here
+count(train)
+count(test)
 ```
 
-*Your answer:*
+*Your answer:* there are 18,028 observations in the training set and 7,807 in the test set.
 
 **1.2** Look at `Gang_Affiliated`. How many values are missing, and who are they? (Hint: cross-tabulate it with `Gender`.) What would happen to your sample if you added this variable to a model without handling the missing values?
 
 ```{r}
-# your code here
+na_gang <- sum(is.na(nij$Gang_Affiliated))
+na_gend <- sum(is.na(nij$Gender))
+na_gang
+na_gend
 ```
 
 *Your answer:*
@@ -123,7 +129,7 @@ summary(base_fit)
 **3.1** Exponentiate the coefficients. Interpret the odds ratio for `prior_fel_arrests` in one sentence, using the word *odds* correctly.
 
 ```{r}
-# your code here
+exp(coef(base_fit))
 ```
 
 *Your answer:*
@@ -144,6 +150,22 @@ people <- tibble(
   prior_misd_arrests = c(1, 1)
 )
 
+people <- people %>%
+  mutate(pred= predict(base_fit, type = "response"))
+
+people_2 <- tibble(
+  male = c(1,1),
+  age_group = factor("48 or older"), levels = levels(nij$age_group),
+  prison_years = factor(c("1-2 years", "1-2 years"), levels = levels(nij$prison_years)),
+  prior_fel_arrests  = c(2, 2),
+  prior_misd_arrests = c(1, 1)
+)
+
+people_2 <- people_2 %>%
+  mutate(pred=predict(base_fit, type = "response"))
+
+people %>%
+  select(male, age_group, prison_years, prior_fel_arrests, prior_misd_arrests, pred) %>%
 # your code here: predict for `people`, then for `people` with one more felony arrest
 ```
 
