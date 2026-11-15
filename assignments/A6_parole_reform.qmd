@@ -37,7 +37,7 @@ The department has promised that the model **will not use race**. You've been hi
 | 5.1–5.2 errors by race | Step 7 |
 | 5.3 what carries race in | Step 8 |
 
-Two differences from the lab: the outcome is called **`recid`** (not `two_year_recid`), and you **fit on `train` and evaluate on `test`**. In the lab we fit and scored on the same data. So every `predict()` in Parts 4 and 5 needs `newdata = test`.
+Two differences from the lab: the outcome is called **`recid`** (not `p_hat`), and you **fit on `train` and evaluate on `test`**. In the lab we fit and scored on the same data. So every `predict()` in Parts 4 and 5 needs `newdata = test`.
 
 
 # The data
@@ -150,47 +150,57 @@ people <- tibble(
   prior_misd_arrests = c(1, 1)
 )
 
-people <- people %>%
-  mutate(pred= predict(base_fit, type = "response"))
+people_2 <- people %>% mutate(prior_fel_arrests = prior_fel_arrests + 1)
 
-people_2 <- tibble(
-  male = c(1,1),
-  age_group = factor("48 or older"), levels = levels(nij$age_group),
-  prison_years = factor(c("1-2 years", "1-2 years"), levels = levels(nij$prison_years)),
-  prior_fel_arrests  = c(2, 2),
-  prior_misd_arrests = c(1, 1)
+results <- tibble(
+  age_group = people$age_group,
+  before    = predict(base_fit, newdata = people,   type = "response"),
+  after     = predict(base_fit, newdata = people_2, type = "response"),
+  change    = after - before
 )
 
-people_2 <- people_2 %>%
-  mutate(pred=predict(base_fit, type = "response"))
-
-people %>%
-  select(male, age_group, prison_years, prior_fel_arrests, prior_misd_arrests, pred) %>%
-# your code here: predict for `people`, then for `people` with one more felony arrest
+results
 ```
 
-*Your answer:*
 
-**3.3** Improve the model. Add at least **three** predictors from your "known at release" list. Keep race out. Call it `my_fit`. In two or three sentences, say what you added and why you expected each one to help.
 
-::: {.callout-warning}
-## Check for missing values before you add a variable
-Some columns have blanks: `Prison_Offense` is missing for about 1 in 8 people, and `Supervision_Level_First` for about 1 in 15. If you add one as it is, `glm()` **silently drops** those people from training, and `predict()` returns `NA` for them in `test`. Then `mean()` gives `NA` in Parts 4–6, and `table()` quietly leaves them out. Either leave the variable out, or keep the blanks as their own category, for example `mutate(offense = replace_na(Prison_Offense, "Missing"))`. Whichever you choose, say so in your answer.
-:::
+**3.3** 
 
 ```{r}
 #| label: my-model
 # your code here: fit my_fit on train
+train <- train %>%
+  mutate(Dependents = replace_na(Dependents, 'None')) %>%
+  mutate(Program_Attendances = replace_na(Program_Attendances, 'No attendances recorded'))
+
+my_fit <- glm(recid ~ male + age_group + prison_years +
+                  prior_fel_arrests + prior_misd_arrests + Education_Level + Dependents + Program_Attendances,
+                family = binomial,
+                data = train)
+
+summary(my_fit)
 ```
 
-*Your answer:*
+I chose three predictors to add to my model; Education Level, Dependents and Program Attendances. Without too much of a relationship with the other predictors, I believe these will help improve my model in determining the likelihood of recidivism. I added them under a few assumptions. Those with more education are less likely to be arrested again as there are more programs in place in educational institutions to help those with mental health issues that contribute to crime. If a person has dependents like children or other family members, they would be less inclined to commit a crime again because being in prison would mean a prolonged time and support away from family. The more a person attends intervention/rehabilitation programs, the more they become inclined to commit crime again since there's a clear effort made towards improvement.
 
 # Part 4: Choosing a threshold
 
-**4.1** Add a column `p_hat` to `test` with predicted probabilities from `my_fit`, and a column `pred_50` that flags anyone at or above 0.5. (Parts 5 and 6 use these column names.) Then make a confusion matrix and compute sensitivity and specificity.
+**4.1** Add a column `p_hat` to `test` with predicted probabilities from `my_fit`, and a column `pred_50` that pred_50s anyone at or above 0.5. (Parts 5 and 6 use these column names.) Then make a confusion matrix and compute sensitivity and specificity.
 
 ```{r}
-# your code here
+#| include: false
+test <- test %>%
+  mutate(p_hat = predict(my_fit, newdata = test, type="response"),
+         pred_50 = as.integer(p_hat >= 0.5))
+
+#table(predicted = test$pred_50, actual = test$p_hat)
+
+test %>%
+  summarize(
+    sensitivity = sum(pred_50 == 1 & p_hat == 1) / sum(p_hat == 1),
+    specificity = sum(pred_50 == 0 & p_hat == 0) / sum(p_hat == 0),
+    accuracy    = mean(pred_50 == p_hat)
+  )
 ```
 
 *Your answer:*
@@ -201,7 +211,7 @@ Some columns have blanks: `Prison_Offense` is missing for about 1 in 8 people, a
 
 **4.3** Compute sensitivity and specificity for every threshold from 0.30 to 0.80 in steps of 0.05, and plot both lines on one chart with threshold on the x-axis.
 
-Hint: in the lab you called `rates_at()` three times by hand. Here you need eleven thresholds. `map_dfr(thresholds, function(t) ...)` runs the same code once per threshold and stacks the results into one data frame. Your version will need `p_hat` instead of `pred`, and `recid` instead of `two_year_recid`.
+Hint: in the lab you called `rates_at()` three times by hand. Here you need eleven thresholds. `map_dfr(thresholds, function(t) ...)` runs the same code once per threshold and stacks the results into one data frame. Your version will need `p_hat` instead of `pred`, and `recid` instead of `p_hat`.
 
 ```{r}
 # your code here
