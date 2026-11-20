@@ -78,39 +78,46 @@ train <- nij %>% filter(Training_Sample == 1)
 test  <- nij %>% filter(Training_Sample == 0)
 ```
 
-**1.1** How many people are in `train` and in `test`? What share of each was rearrested within three years?
+**1.1**
 
 ```{r}
+#| label: counting train and test recidivism
+#| message: false
+#| echo: false
+#| include: false
 count(train)
 count(test)
 sum(train$Prison_Years=='More than 3 years', na.rm=TRUE)
 sum(test$Prison_Years=='More than 3 years', na.rm=TRUE)
 ```
 
-*Your answer:* there are 18,028 observations in the training set and 7,807 in the test set. 58% of people in the training and 57% test set was rearrested within three years. This was calculated by extracting the total of people rearrested with more than 3 years ('Recidivism_Within_3years') from the total observations of each set, then dividing that number by the total which was roughly 0.58 for the training and 0.57 for the test (10,421 in the training set and 4,483 in the test set.)
+There are 18,028 observations in the training set and 7,807 in the test set. 58% of people in the training and 57% test set was rearrested within three years. This was calculated by extracting the total of people rearrested with more than 3 years ('Recidivism_Within_3years') from the total observations of each set, then dividing that number by the total which was roughly 0.58 for the training and 0.57 for the test (10,421 in the training set and 4,483 in the test set.)
 
 **1.2** Look at `Gang_Affiliated`. How many values are missing, and who are they? (Hint: cross-tabulate it with `Gender`.) What would happen to your sample if you added this variable to a model without handling the missing values?
 
 ```{r}
+#| label: counting missing values
+#| echo: false
 na_gang <- sum(is.na(nij$Gang_Affiliated))
-na_gend <- sum(is.na(nij$Gender))
+na_gang_table <- nij %>%
+  select('Gender', 'Gang_Affiliated')
+f_gend <- sum(nij$Gender == 'F', na.rm=TRUE)
 na_gang
-na_gend
+f_gend
 ```
 
-*Your answer:*
+There are 3,167 missing values for 'Gang_Affiliated', they are the women in this dataset. If we added this variable to a model without handling the missing values, our model would be inherently biased towards the male subjects in our data.
 
 # Part 2: What would you know at the moment of decision?
 
 The parole decision happens **at release**. Some columns in this file were recorded **during** the three years of supervision that followed.
 
-**2.1** Sort every predictor column into one of two lists. You don't need code; use `names(nij)` and the column names.
-
+**2.1** 
 | Known at release | Recorded during supervision (leakage) |
 |ID|Gang_Affiliated|
 |Gender|Supervision_Risk_Score_First|
 |Race|Supervision_Level_First|
-|Age_at_Release|Dependents|
+|Age_at_Release|Recidivism_Arrest_Year3|
 |Residence_PUMA|Condition_MH_SA|
 |Education_Level|Condition_Cog_Ed|
 |Prison_Offense|Condition_Other|
@@ -133,19 +140,18 @@ The parole decision happens **at release**. Some columns in this file were recor
 |Prior_Conviction_Episodes_GunCharges|Recidivism_Within_3years|
 |Prior_Revocations_Parole|Recidivism_Arrest_Year1|
 |Prior_Revocations_Probation|Recidivism_Arrest_Year2|
-||Recidivism_Arrest_Year3|
+|Dependents||
 
 
 **2.2** Pick one variable from the right-hand column and explain, in two sentences, why including it would make your model look better than it really is. 
 
-*Your answer:*
+*Your answer:* Variables like 'Recidivism_Arrest_Year3' would make our model's performance look better because if they have been arrested within 3 years again, then we would have the better probability of predicting recidivism within 3 years since there's already data on it. The problem in using variables to be recorded after our prediction and ones so close to our prediction, is that the outcomes we predict are modeled after ones that already happened. So we would get high numbers because those outcomes happened in our training and test sets but not when we test in real life.
 
 # Part 3: Build a race-blind model
 
-Start from this model.
-
 ```{r}
 #| label: base-model
+#| echo: false
 base_fit <- glm(recid ~ male + age_group + prison_years +
                   prior_fel_arrests + prior_misd_arrests,
                 family = binomial,
@@ -160,7 +166,7 @@ summary(base_fit)
 exp(coef(base_fit))
 ```
 
-*Your answer:*
+*Your answer:* For every one prior felony arrests, the odds of being arrested again within three years are 18% higher.
 
 **3.2** Constant on the odds, not on the probability. Use `predict(..., type = "response")` with `newdata` to compute the predicted probability for two made-up people, then add one prior felony arrest to each:
 
@@ -170,6 +176,8 @@ exp(coef(base_fit))
 How much does one more arrest change each person's probability? Why are the two changes different?
 
 ```{r}
+#| label: computing the predicted probability for two made-up people,a dding one prior felony arrest to each
+#| echo: false
 people <- tibble(
   male               = c(1, 1),
   age_group          = factor(c("23-27", "48 or older"), levels = levels(nij$age_group)),
@@ -189,14 +197,12 @@ results <- tibble(
 
 results
 ```
-
-
+Adding one more arrest increases both of their probabilities of being arrested again, 4% for the younger man, and 2% for the older man. The two changes are different because the older man's probability was already lower. 
 
 **3.3** 
 
 ```{r}
 #| label: my-model
-# your code here: fit my_fit on train
 train <- train %>%
   mutate(Dependents = replace_na(Dependents, 'None')) %>%
   mutate(Program_Attendances = replace_na(Program_Attendances, 'No attendances recorded'))
@@ -235,7 +241,7 @@ test %>%
 
 **4.2** What share of the test set does your model label "high risk" at 0.5? Compare it to the share actually rearrested. What does that tell you about 0.5 as a default for this data?
 
-*Your answer:*
+*Your answer:* 5,470 out of 7,807 or 70% of people in the test set are flagged as 'high risk' at 0.5 in my model. Of the people actually rearrested within three years, there were only 822 in the test set or 10%. The 0.5 default was overly cautious for this data, flagging 60% of people that were not rearrested.
 
 **4.3** Compute sensitivity and specificity for every threshold from 0.30 to 0.80 in steps of 0.05, and plot both lines on one chart with threshold on the x-axis.
 
