@@ -26,7 +26,7 @@ The department has promised that the model **will not use race**. You've been hi
 
 **What you're turning in:** this rendered document, published in the `assignments/` folder of your portfolio.
 
-**How this assignment works:** it has less scaffolding than earlier ones. The **Week 11 lab** (COMPAS) is your fully worked example: almost every step here has a matching step there. Where the NIJ data behaves differently from COMPAS, the instructions below tell you. Everywhere else, adapt the lab code yourself.
+**How this assignment works:** it has less scaffolding than earlier ones. The **Week 11 lab** (nij) is your fully worked example: almost every step here has a matching step there. Where the NIJ data behaves differently from nij, the instructions below tell you. Everywhere else, adapt the lab code yourself.
 
 | A5 part | Week 11 lab step |
 |---|---|
@@ -58,7 +58,7 @@ A few things to know before you start:
 #| label: setup
 #| message: false
 library(tidyverse)
-
+library(pROC) 
 
 nij <- read_csv("/Users/chloealimurong/GitHub/MUSA-5080-portfolio/data/nij_recidivism.csv") %>%
   mutate(
@@ -231,9 +231,9 @@ test <- test %>%
 
 test %>%
   summarize(
-    sensitivity = sum(pred_50 == 1 & p_hat == 1) / sum(p_hat == 1),
-    specificity = sum(pred_50 == 0 & p_hat == 0) / sum(p_hat == 0),
-    accuracy    = mean(pred_50 == p_hat)
+    sensitivity = sum(pred_50 == 1 & recid == 1) / sum(recid == 1),
+    specificity = sum(pred_50 == 0 & recid == 0) / sum(recid == 0),
+    accuracy    = mean(pred_50 == recid)
   )
 ```
 
@@ -243,21 +243,50 @@ test %>%
 
 *Your answer:* 5,470 out of 7,807 or 70% of people in the test set are flagged as 'high risk' at 0.5 in my model. Of the people actually rearrested within three years, there were only 822 in the test set or 10%. The 0.5 default was overly cautious for this data, flagging 60% of people that were not rearrested.
 
-**4.3** Compute sensitivity and specificity for every threshold from 0.30 to 0.80 in steps of 0.05, and plot both lines on one chart with threshold on the x-axis.
-
-Hint: in the lab you called `rates_at()` three times by hand. Here you need eleven thresholds. `map_dfr(thresholds, function(t) ...)` runs the same code once per threshold and stacks the results into one data frame. Your version will need `p_hat` instead of `pred`, and `recid` instead of `p_hat`.
+**4.3** Computing sensitivity and specificity for every threshold from 0.30 to 0.80 in steps of 0.05, and plot both lines on one chart with threshold on the x-axis.
 
 ```{r}
-# your code here
+#| label: computing the sensitivity and specificity for every threshold from 0.3-0.8 in steps of 0.05
+rates_at <- function(data, threshold) {
+  data %>%
+    mutate(flag = as.integer(p_hat >= threshold)) %>%
+    summarize(
+      threshold = threshold,
+      sensitivity = sum(flag == 1 & recid == 1) / sum(recid == 1),
+      specificity = sum(flag == 0 & recid == 0) / sum(recid == 0),
+      accuracy = mean(flag == recid)
+    )
+}
+
+thresholds <- seq(0.30, 0.80, by = 0.05)
+sweep <- map_dfr(thresholds, function(t) rates_at(test, t))
+sweep
+
+sweep %>%
+  pivot_longer(c(sensitivity, specificity), names_to = "metric", values_to = "rate") %>%
+  ggplot(aes(threshold, rate, color = metric)) +
+  geom_line() + geom_point() +
+  theme_minimal() +
+  labs(x = "Threshold", y = "Rate")
 ```
 
 **4.4** Plot the ROC curve for `my_fit` on the test set with `pROC` and report the AUC. In one sentence: what does the AUC tell you, and what doesn't it tell you about the decision the department has to make?
 
 ```{r}
-# your code here
+#| label: Plotting the ROC curve for my_fit on the test set with pROC
+#| message: false
+roc_obj <- roc(test$recid, test$p_hat)
+auc(roc_obj)
+
+ggroc(roc_obj, legacy.axes = TRUE) +
+  geom_abline(linetype = "dashed", color = "grey50") +
+  labs(x = "False positive rate (1 - specificity)",
+       y = "True positive rate (sensitivity)",
+       title = "ROC curve: my_fit on the test set") +
+  theme_minimal()
 ```
 
-*Your answer:*
+*Your answer:* The area under the curve (AUC) is 0.7042 tells me that there is a 70% probability that my model, if given a random person that was rearrested or not, will rank the rearrested higher than those who were not resarrested. However, the AUC doesn't provide a standard threshold to use for Use A or Use B because the errors from those thresholds may affect people based on race differently. 
 
 # Part 5: Is it race-blind?
 
@@ -266,7 +295,18 @@ Race isn't in your model. Now check the errors by race on the **test set**.
 **5.1** At the threshold of 0.5, compute for each race: the share labeled high risk, the share actually rearrested, the **false positive rate** (labeled high risk, not rearrested, out of everyone not rearrested), and the **false negative rate**.
 
 ```{r}
-# your code here
+test %>%
+  filter(Race %in% c('BLACK', 'WHITE')) %>%
+  mutate(flag=as.integer(p_hat>=0.5)) %>%
+  group_by(Race) %>%
+  summarize(
+    n= n(),
+    base_rate = mean(recid),
+    fpr = sum(flag == 1 & recid == 0) / sum(recid ==0),
+    fnr = sum(flag == 0 & recid == 1) / sum(recid ==1),
+    accuracy = mean(flag == recid)
+  )
+
 ```
 
 **5.2** Repeat 5.1 at two other thresholds from your sweep. Does the gap between groups close, stay, or flip?
