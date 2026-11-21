@@ -295,6 +295,8 @@ Race isn't in your model. Now check the errors by race on the **test set**.
 **5.1** At the threshold of 0.5, compute for each race: the share labeled high risk, the share actually rearrested, the **false positive rate** (labeled high risk, not rearrested, out of everyone not rearrested), and the **false negative rate**.
 
 ```{r}
+#| label: at threshold 0.5 compute for each race; fpr and fnr
+
 test %>%
   filter(Race %in% c('BLACK', 'WHITE')) %>%
   mutate(flag=as.integer(p_hat>=0.5)) %>%
@@ -312,18 +314,75 @@ test %>%
 **5.2** Repeat 5.1 at two other thresholds from your sweep. Does the gap between groups close, stay, or flip?
 
 ```{r}
-# your code here
+#| label: from the sweep, i chose 0.3 and 0.8 on either end of the threshold levels.
+
+test %>%
+  filter(Race %in% c('BLACK', 'WHITE')) %>%
+  mutate(flag=as.integer(p_hat>=0.3)) %>%
+  group_by(Race) %>%
+  summarize(
+    n= n(),
+    base_rate = mean(recid),
+    fpr = sum(flag == 1 & recid == 0) / sum(recid ==0),
+    fnr = sum(flag == 0 & recid == 1) / sum(recid ==1),
+    accuracy = mean(flag == recid)
+  )
+
+test %>%
+  filter(Race %in% c('BLACK', 'WHITE')) %>%
+  mutate(flag=as.integer(p_hat>=0.8)) %>%
+  group_by(Race) %>%
+  summarize(
+    n= n(),
+    base_rate = mean(recid),
+    fpr = sum(flag == 1 & recid == 0) / sum(recid ==0),
+    fnr = sum(flag == 0 & recid == 1) / sum(recid ==1),
+    accuracy = mean(flag == recid)
+  )
 ```
 
-*Your answer:*
+*Your answer:* The accuracy rate for the 0.3 threshold (63% and 64%) is slightly lower than the 0.5 threshold (66% and 67%) but the accuracy for the 0.8 threshold is much lower (49% and 50%). I notice the fpr and fnr distributions for the 0.3 and 0.8 thresholds flip, with the 0.3 threshold having higher overall fpr and low fnr and 0.8 having a high fnr and low fpr.
 
 **5.3** Investigate at least two candidates by comparing their distributions by race. Possibilities include age, prior arrests, prison offense, and place (`puma`). Show your evidence with a table or chart for each.
 
 ```{r}
-# your code here
+#| label: computing the predicted probability for two madeup people based on race
+
+# Candidate 1: prior felony arrests
+test %>%
+  group_by(Race) %>%
+  summarize(mean_prior_fel  = mean(prior_fel_arrests),
+            mean_prior_misd = mean(prior_misd_arrests),
+            share_5plus_fel = mean(prior_fel_arrests >= 5),
+            n = n())
+
+ggplot(test, aes(prior_fel_arrests, fill = Race)) +
+  geom_histogram(position = "dodge", bins = 11) +
+  theme_minimal() +
+  labs(x = "Prior felony arrests (0-10)", y = "People")
+
+# Candidate 2: age at release
+test %>%
+  count(Race, age_group) %>%
+  group_by(Race) %>%
+  mutate(share = n / sum(n)) %>%
+  ggplot(aes(age_group, share, fill = Race)) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(x = "Age at release", y = "Share of each race")
+
+# Candidate 3: place
+test %>%
+  count(puma, Race) %>%
+  group_by(puma) %>%
+  mutate(share = n / sum(n)) %>%
+  ggplot(aes(puma, share, fill = Race)) +
+  geom_col() +
+  theme_minimal() +
+  labs(x = "Place (PUMA group)", y = "Share of parolees")
 ```
 
-*Your answer:*
+*Your answer:* White people in our test set have slightly more prior arrests than Black people on average (5.84 vs. 5.70 felonies, 3.55 vs. 3.16 misdemeanors), so the histogram's taller Black bars just reflect that there are more Black people in our test set overall. For age groups, Black people skew younger, and the model likely gives younger people higher risk which raises risk scores for Black people since there are more observations of them in our test set. The racial mix differs a lot by place, from PUMA 6 where Black people are about 89% to PUMAs 13, 17 and 24 where white people are about 83-86%, so any model that uses place would carry information about race.
 
 
 # Part 6: Does it hold up in places it hasn't seen?
@@ -333,34 +392,45 @@ Use leave-one-PUMA-group-out cross-validation **on the training set**, the same 
 ```{r}
 pumas <- levels(train$puma)
 
-#cv_puma <- map_dfr(pumas, function(u) {
-#  cv_train <- train %>% filter(puma != u)
-#  cv_test  <- train %>% filter(puma == u)
+cv_puma <- map_dfr(pumas, function(u) {
+  cv_train <- train %>% filter(puma != u)
+  cv_test  <- train %>% filter(puma == u)
 
-#  fit <- glm(formula(my_fit), family = binomial, data = cv_train)
+  fit <- glm(formula(my_fit), family = binomial, data = cv_train)
 
-#  cv_test %>%
-#    mutate(pred = as.integer(predict(fit, newdata = cv_test,
-#                                     type = "response") >= 0.5)) %>%
-#    summarize(puma       = u,
-#              n          = n(),
-#              share_black = mean(Race == "BLACK"),
-#              accuracy   = mean(pred == recid),
-#              fpr        = ___)
-#})
+  cv_test %>%
+    mutate(pred = as.integer(predict(fit, newdata = cv_test,
+                                     type = "response") >= 0.5)) %>%
+    summarize(puma       = u,
+              n          = n(),
+              share_black = mean(Race == "BLACK"),
+              accuracy   = mean(pred == recid),
+              fpr        = sum(pred == 1 & recid == 0) / sum(recid == 0))
+})
 ```
 
 **6.1** Plot each PUMA group's false positive rate against its share of Black parolees. What pattern, if any, do you see?
 
 ```{r}
-# your code here
+#| label: plotting each puma group fpr against its share of Black parolees
+#| message: false
+
+ggplot(cv_puma, aes(share_black, fpr)) +
+  geom_point(aes(size = n)) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  scale_x_continuous(labels = scales::percent) +
+  scale_y_continuous(labels = scales::percent) +
+  theme_minimal() +
+  labs(x = "Share of parolees who are Black",
+       y = "False positive rate",
+       size = "People")
 ```
 
-*Your answer:*
+*Your answer:* Overall, there are higher and more shares of parolees who are Black for each PUMA group.
 
 **6.2** If you put `puma` itself into the model as a predictor, would that make the model more or less race-blind? Make an argument using what you found in 6.1. (You may test it, but you don't have to.)
 
-*Your answer:*
+*Your answer:* If we were to put puma into the model as a predictor, it would make the model less race-blind since in our data, there are higher shares of Black parolees living in certain puma groups than White parolees. 
 
 # Part 7: The memo
 
