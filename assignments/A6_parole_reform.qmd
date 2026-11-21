@@ -83,7 +83,6 @@ test  <- nij %>% filter(Training_Sample == 0)
 ```{r}
 #| label: counting train and test recidivism
 #| message: false
-#| echo: false
 #| include: false
 count(train)
 count(test)
@@ -97,7 +96,6 @@ There are 18,028 observations in the training set and 7,807 in the test set. 58%
 
 ```{r}
 #| label: counting missing values
-#| echo: false
 na_gang <- sum(is.na(nij$Gang_Affiliated))
 na_gang_table <- nij %>%
   select('Gender', 'Gang_Affiliated')
@@ -151,7 +149,6 @@ The parole decision happens **at release**. Some columns in this file were recor
 
 ```{r}
 #| label: base-model
-#| echo: false
 base_fit <- glm(recid ~ male + age_group + prison_years +
                   prior_fel_arrests + prior_misd_arrests,
                 family = binomial,
@@ -177,7 +174,6 @@ How much does one more arrest change each person's probability? Why are the two 
 
 ```{r}
 #| label: computing the predicted probability for two made-up people,a dding one prior felony arrest to each
-#| echo: false
 people <- tibble(
   male               = c(1, 1),
   age_group          = factor(c("23-27", "48 or older"), levels = levels(nij$age_group)),
