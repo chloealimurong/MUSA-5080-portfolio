@@ -438,7 +438,10 @@ Write a memo (**400–600 words**) to the Department of Community Supervision. I
 
 Write to a deputy commissioner, not to a statistician. No code, no jargon you haven't explained.
 
-*Your memo:*
+*Your memo:* 
+1. For Use A, people above a 0.55 threshold will receive more restrictive supervision. For Use B, people above a 0.45 threshold will receive more supportive reentry service. 
+2. While the model may not explicitly use race as a variable, there are underlying factors to consider in our model and results that reveal Black and white parolees are not treated the same. A parolee's geographic location (puma) is highly correlated to race. As well as the sets of data may have disproportionate numbers of Black people which may lead to biased result
+3. I would not deploy this for Use A, unless conditions were equitable.
 
 # Optional challenge (no extra points. just extra muscles.)
 
